@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Accelerate — Monthly Report Builder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+
+  :root{
+    --navy:#0E1650;
+    --navy-2:#222FA6;
+    --bg:#F5F6F8;
+    --card:#FFFFFF;
+    --border:#E4E7EC;
+    --lime:#CFFF4D;
+    --lime-dark:#9FE619;
+    --green:#3FA34D;
+    --green-bg:#DFF3D8;
+    --green-border:#C3E8BB;
+    --red:#D6607A;
+    --red-bg:#FBE1E4;
+    --red-border:#F3C7CE;
+    --amber:#B8860B;
+    --amber-bg:#FBF0D9;
+    --amber-border:#F0DBA6;
+    --blue-bg:#DCE8FB;
+    --purple-bg:#E6DFF7;
+    --text:#14162B;
+    --muted:#6B7280;
+    --radius:10px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ============ APP SHELL ============ */
+  #app{ max-width:1000px; margin:0 auto; padding:26px 20px 60px; }
+  .app-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .app-title{ font-size:20px; font-weight:800; color:var(--navy); }
+  .app-title span{ color:var(--navy-2); }
+  .app-sub{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+
+  .stepper{ display:flex; gap:8px; margin-bottom:24px; }
+  .step-pill{
+    flex:1; text-align:center; padding:9px 6px; border-radius:100px; font-size:11.5px; font-weight:700;
+    background:#fff; border:1px solid var(--border); color:var(--muted);
+  }
+  .step-pill.active{ background:var(--navy); color:#fff; border-color:var(--navy); }
+  .step-pill.done{ background:var(--green-bg); color:#1E6B3B; border-color:var(--green-border); }
+
+  .panel{
+    background:#fff; border:1px solid var(--border); border-radius:14px; padding:26px 28px; margin-bottom:16px;
+    display:none;
+  }
+  .panel.active{ display:block; }
+  .panel h2{ font-size:17px; font-weight:800; margin:0 0 4px; color:var(--navy); }
+  .panel .hint{ font-size:12.5px; color:var(--muted); margin-bottom:20px; line-height:1.5; }
+
+  .chip-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:16px; }
+  .chip{
+    border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer;
+    display:flex; align-items:center; gap:10px; font-weight:700; font-size:13.5px; transition:all .12s;
+    background:#fff;
+  }
+  .chip:hover{ border-color:var(--navy-2); }
+  .chip input{ width:16px; height:16px; accent-color:var(--navy-2); }
+  .chip.checked{ background:var(--blue-bg); border-color:var(--navy-2); }
+
+  .toggle-row{
+    display:flex; align-items:center; gap:10px; padding:14px 16px; border-radius:10px;
+    background:#FBF6E8; border:1.5px solid #F0E2A8; margin-top:6px; font-size:13px;
+  }
+  .toggle-row input{ width:16px; height:16px; }
+  .toggle-row b{ color:#8A6D00; }
+
+  .field-group{ margin-bottom:16px; }
+  .field-group label{ display:block; font-size:12px; font-weight:700; color:var(--navy); margin-bottom:5px; }
+  .field-group .sub{ font-size:11px; color:var(--muted); font-weight:400; margin-top:2px; }
+  .field-group input[type=text], .field-group input[type=number], .field-group textarea, .field-group select{
+    width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px; font-size:13px;
+    font-family:'Inter',sans-serif; color:var(--text); background:#fff;
+  }
+  .field-group textarea{ resize:vertical; min-height:52px; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .field-row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+
+  .source-block{ border:1px dashed var(--border); border-radius:12px; padding:18px 20px; margin-bottom:16px; display:none; }
+  .source-block.show{ display:block; }
+  .source-block h3{ font-size:13.5px; font-weight:800; color:var(--navy); margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  .badge-auto{ font-size:9px; font-weight:800; letter-spacing:.03em; background:var(--green-bg); color:#1E6B3B; padding:3px 8px; border-radius:100px; }
+  .badge-manual{ font-size:9px; font-weight:800; letter-spacing:.03em; background:#FBF0DC; color:#8A6D00; padding:3px 8px; border-radius:100px; }
+
+  .upload-box{
+    border:2px dashed var(--navy-2); border-radius:10px; padding:22px; text-align:center; background:var(--blue-bg);
+    cursor:pointer; margin-top:10px;
+  }
+  .upload-box input{ display:none; }
+  .upload-box .u-title{ font-weight:700; font-size:13px; color:var(--navy); }
+  .upload-box .u-sub{ font-size:11.5px; color:var(--muted); margin-top:4px; }
+  .upload-status{ margin-top:10px; font-size:12px; font-weight:600; }
+  .upload-status.ok{ color:var(--green); }
+  .upload-status.warn{ color:var(--amber); }
+  .upload-status.err{ color:var(--red); }
+
+  .client-pick{ margin-top:12px; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; padding:11px 20px; border-radius:9px; border:none;
+    font-family:'Inter',sans-serif; font-weight:700; font-size:13px; cursor:pointer;
+  }
+  .btn-primary{ background:var(--navy); color:#fff; }
+  .btn-primary:hover{ background:var(--navy-2); }
+  .btn-lime{ background:var(--lime); color:var(--navy); }
+  .btn-lime:hover{ background:var(--lime-dark); }
+  .btn-ghost{ background:#fff; color:var(--navy); border:1px solid var(--border); }
+  .btn-ghost:hover{ border-color:var(--navy-2); }
+  .btn-row{ display:flex; justify-content:space-between; margin-top:22px; }
+  .btn-row .right{ display:flex; gap:10px; }
+
+  .small-note{ font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.5; }
+  .priorities-input{ display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+  .priorities-input .num{ font-weight:800; color:var(--navy-2); width:20px; flex-shrink:0; }
+
+  /* ============ TOOLTIP ============ */
+  .tip{
+    position:relative; display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; border-radius:50%; background:#DDE1E8; color:var(--muted);
+    font-size:10px; font-weight:800; font-style:normal; cursor:help; margin-left:6px;
+    vertical-align:middle; flex-shrink:0; user-select:none;
+  }
+  .tip:hover{ background:var(--navy-2); color:#fff; }
+  .tip .tip-bubble{
+    display:none; position:absolute; bottom:135%; left:50%; transform:translateX(-50%);
+    width:250px; background:var(--navy); color:#fff; font-size:11.5px; font-weight:500;
+    line-height:1.5; padding:10px 12px; border-radius:8px; z-index:80; text-align:left;
+    box-shadow:0 10px 24px rgba(14,22,80,0.28); pointer-events:none;
+  }
+  .tip .tip-bubble b{ color:var(--lime); }
+  .tip .tip-bubble::after{
+    content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:var(--navy);
+  }
+  .tip:hover .tip-bubble{ display:block; }
+  h3 .tip .tip-bubble{ font-weight:500; text-transform:none; letter-spacing:0; }
+
+  /* ============ AUTO-FILLED (locked) FIELDS ============ */
+  .field-group.is-auto input{
+    background:var(--green-bg); border-color:var(--green-border); color:#1E6B3B; font-weight:700;
+  }
+  .field-group .auto-tag{
+    display:none; font-size:10px; font-weight:800; color:#1E6B3B; margin-left:6px; letter-spacing:.02em;
+  }
+  .field-group.is-auto .auto-tag{ display:inline; }
+
+  /* ============ REPORT STYLES (scoped) ============ */
+  #reportPanel{ background:transparent; border:none; padding:0; }
+  #reportToolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+
+  .sheet, .sheet *{
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  .sheet{
+    width:297mm; height:210mm; margin:0 auto 20px; background:var(--bg);
+    box-shadow:0 0 0 1px rgba(0,0,0,0.04), 0 8px 30px rgba(20,33,62,0.12);
+    overflow:hidden; /* safety net — sheet-inner is scaled to fit before this ever has to clip anything */
+  }
+  .sheet-inner{ padding:8mm 10mm; transform-origin:top left; box-sizing:border-box; }
+  @page{ size:A4 landscape; margin:0; }
+  @media print{
+    .app-header, .stepper, #reportToolbar{ display:none !important; } /* visibility:hidden alone still occupies layout space — these need to be fully removed, or their height pushes the print output onto a 2nd (blank) page */
+    #app{ padding:0 !important; max-width:none !important; }
+    #panel-4{ padding:0 !important; border:none !important; background:transparent !important; margin:0 !important; }
+    body *{ visibility:hidden; }
+    .sheet, .sheet *{ visibility:visible; }
+    .sheet{ position:absolute; top:0; left:0; margin:0; box-shadow:none; width:297mm; height:210mm; }
+    .sheet .tip{ display:none; } /* tooltips are for the PO reviewing on-screen, not the client-facing PDF */
+  }
+
+  .masthead{
+    background:linear-gradient(135deg, #0B1046 0%, #1B23A0 55%, #2B3FE0 100%); color:#fff; border-radius:var(--radius);
+    padding:4mm 7mm; display:flex; justify-content:space-between; align-items:center; margin-bottom:3.5mm;
+  }
+  .mh-title{ font-size:20px; font-weight:800; letter-spacing:-0.01em; margin:0 0 2px; }
+  .mh-sub{ font-size:11px; color:#C7CEF5; }
+  .mh-tag{ font-size:10px; font-weight:800; letter-spacing:0.04em; background:var(--lime); color:#0E1650; padding:6px 13px; border-radius:100px; white-space:nowrap; }
+
+  .stats{ display:grid; grid-template-columns:repeat(3,1fr); background:var(--card); border-radius:var(--radius); border:1px solid var(--border); margin-bottom:3.5mm; }
+  .stat{ padding:3mm 4mm; border-right:1px solid var(--border); }
+  .stat:last-child{border-right:none;}
+  .stat:first-child{ border-top-left-radius:var(--radius); border-bottom-left-radius:var(--radius); }
+  .stat:last-child{ border-top-right-radius:var(--radius); border-bottom-right-radius:var(--radius); }
+  .stat-label{ font-size:9px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .stat-value{ font-size:19px; font-weight:800; color:var(--navy); line-height:1; margin-bottom:5px; }
+  .stat-note{ font-size:10.5px; color:var(--muted); }
+  .stat-note.g{ color:var(--green); font-weight:700; }
+  .trend-up{ color:var(--green); font-weight:700; }
+  .trend-down{ color:var(--red); font-weight:700; }
+
+  .graphs-card{ background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:4mm 6mm; margin-bottom:3.5mm; }
+  .row-3{ display:grid; grid-template-columns:52mm 1fr; gap:6mm; align-items:start; }
+  .col-goal{ border-right:1px solid var(--border); padding-right:5mm; }
+  .col-title{ font-size:10px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; color:var(--navy); margin-bottom:2.5mm; }
+  .col-title span{ color:var(--muted); font-weight:500; letter-spacing:0; text-transform:none; }
+
+  .dial-wrap{ display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .dial-caption{ text-align:center; margin-top:2mm; }
+  .dial-caption .big{ font-size:11.5px; color:var(--navy); font-weight:700; }
+  .dial-caption .small{ font-size:8.5px; color:var(--muted); margin-top:2px; }
+  .dial-num{ font-size:23px; font-weight:800; fill:var(--navy); }
+  .dial-label{ font-size:8px; font-weight:700; letter-spacing:0.05em; fill:var(--muted); }
+  .audience-chip{ margin-top:3mm; background:var(--blue-bg); border-radius:8px; padding:2.2mm 4mm; text-align:center; width:100%; }
+  .audience-chip .n{ font-size:14px; font-weight:800; color:var(--navy); }
+  .audience-chip .l{ font-size:8px; color:var(--muted); font-weight:700; letter-spacing:0.03em; text-transform:uppercase; }
+
+  .chart-wrap{ width:100%; }
+  .chart-legend{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1.5mm; }
+  .chart-insight{ font-size:10.5px; color:var(--green); font-weight:700; }
+  .chart-wrap svg{ width:100%; height:auto; display:block; }
+  .empty-note{ font-size:10.5px; color:var(--muted); font-style:italic; padding:18mm 2mm; text-align:center; }
+
+  .line-wrap{ display:flex; flex-direction:column; align-items:center; }
+  .line-wrap svg{ width:100%; height:auto; display:block; }
+  .line-summary{ margin-top:2.5mm; background:var(--green-bg); border-radius:8px; padding:2mm 3.5mm; text-align:center; width:100%; }
+  .line-summary .n{ font-size:11.5px; font-weight:800; color:#1E6B3B; }
+  .line-summary .l{ font-size:7.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.02em; }
+
+  .grid3{ display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:4.2mm; align-items:stretch; }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:4.0mm 4.8mm; }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead th{ font-size:9px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted); text-align:left; padding:0 6px 7px 0; border-bottom:1px solid var(--border); }
+  tbody td{ padding:7px 6px 7px 0; font-size:11px; line-height:1.35; border-bottom:1px solid #F0F1F3; vertical-align:top; }
+  tbody tr:last-child td{ border-bottom:none; }
+  td.num{ font-weight:600; text-align:right; }
+  .rank{ display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px; border-radius:50%; background:var(--green-bg); color:var(--green); font-size:9.5px; font-weight:700; }
+  .meta{ font-size:9px; color:var(--muted); display:inline-block; margin-top:2px; }
+
+  .impl-list{ list-style:none; margin:0; padding:0; }
+  .impl-list li{ display:flex; gap:8px; padding:7px 0; border-top:1px solid #F0F1F3; font-size:11px; line-height:1.4; }
+  .impl-list li:first-child{ border-top:none; padding-top:0; }
+  .impl-badge{ flex-shrink:0; width:16px; height:16px; border-radius:5px; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .impl-badge.yes{ background:var(--green-bg); }
+  .impl-badge.no{ background:#E7E9EC; }
+  .impl-badge svg{ width:9px; height:9px; }
+  .impl-label{ font-weight:700; color:var(--navy); }
+
+  .priorities{ background:var(--navy); border:none; border-left:4px solid var(--lime); box-shadow:0 4px 14px rgba(11,16,70,0.3); }
+  .priorities .card-title{ color:#fff; }
+  .priorities ul{ list-style:none; margin:0; padding:0; }
+  .priorities li{ font-size:11px; line-height:1.4; padding:7px 0; color:#C7CEF5; border-top:1px solid rgba(255,255,255,0.12); }
+  .priorities li:first-child{ border-top:none; padding-top:0; }
+  .priorities .step{ color:var(--lime); font-weight:800; margin-right:6px; font-size:10.5px; }
+  .card-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:3.0mm; }
+  .card-title{ font-size:10.5px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; color:var(--navy); }
+  .card-title span{ color:var(--muted); font-weight:500; letter-spacing:0; text-transform:none; }
+
+  .footer{ display:flex; justify-content:space-between; padding:2mm 1mm 0; font-size:9.5px; color:var(--muted); font-weight:500; }
+
+  @media (max-width:1040px){
+    .sheet{ width:100%; height:auto; overflow:visible; }
+  }
+
+</style>
+</head>
+<body>
+<div id="iframeBlock" style="display:none; position:fixed; inset:0; background:#0E1650; color:#fff; z-index:9999; align-items:center; justify-content:center; padding:24px; text-align:center; font-family:'Inter',sans-serif;">
+  <div style="max-width:480px;">
+    <div style="font-size:34px; margin-bottom:12px;">📥</div>
+    <div style="font-size:19px; font-weight:800; margin-bottom:10px;">Open this file in your browser first</div>
+    <div style="font-size:14px; line-height:1.6; opacity:0.9;">
+      This looks like it's being viewed inside Slack's built-in preview, which can't run this tool properly — that's why buttons like Print don't work.
+      <br><br>
+      <b>Download the file</b> (don't click "Open" in Slack), then open the downloaded file directly in <b>Chrome, Edge, Firefox, or Safari</b> — on both Mac and Windows, that just means double-clicking the downloaded file, or dragging it into an already-open browser window.
+    </div>
+  </div>
+</div>
+<div class="dl-banner" style="background:#FBF0D9; border-bottom:1px solid #F0DBA6; color:#6B4E00; font-size:12px; font-weight:600; text-align:center; padding:8px 16px;">
+  📥 Using this from Slack? Download the file first, then open it from your Downloads folder in Chrome, Edge, Firefox, or Safari — don't use Slack's built-in preview, some buttons won't work there.
+</div>
+<div id="app">
+
+  <div class="app-header">
+    <div>
+      <div class="app-title">Accelerate <span>Report Builder</span></div>
+      <div class="app-sub">Upload what you have, fill in the rest, get the monthly report.</div>
+    </div>
+    <div style="text-align:right;">
+      <div id="draftStatus" style="font-size:11px; color:var(--muted); margin-bottom:6px;"></div>
+      <button class="btn btn-ghost" type="button" style="padding:6px 12px; font-size:11.5px;" onclick="if(confirm(&quot;Clear everything and start over? This can&#39;t be undone.&quot;)) clearDraft();">Clear form</button>
+    </div>
+  </div>
+
+  <div class="stepper">
+    <div class="step-pill active" id="pill-1">1 · Channels</div>
+    <div class="step-pill" id="pill-2">2 · Data</div>
+    <div class="step-pill" id="pill-3">3 · Details</div>
+    <div class="step-pill" id="pill-4">4 · Report</div>
+  </div>
+
+  <!-- ================= STEP 1 : CHANNELS ================= -->
+  <div class="panel active" id="panel-1">
+    <h2>Which channels does this client use?</h2>
+    <div class="hint">This decides which upload/entry fields you'll see next. Select all that apply.</div>
+
+    <div class="chip-grid">
+      <label class="chip" id="chip-instagram"><input type="checkbox" data-ch="instagram" checked> Instagram</label>
+      <label class="chip" id="chip-facebook"><input type="checkbox" data-ch="facebook" checked> Facebook</label>
+      <label class="chip" id="chip-tiktok"><input type="checkbox" data-ch="tiktok"> TikTok</label>
+      <label class="chip" id="chip-linkedin"><input type="checkbox" data-ch="linkedin"> LinkedIn</label>
+      <label class="chip" id="chip-youtube"><input type="checkbox" data-ch="youtube"> YouTube</label>
+    </div>
+
+    <label class="toggle-row">
+      <input type="checkbox" id="noMetaAccess">
+      <span><b>No Meta (Instagram/Facebook) access this month</b> — switches the Meta section to manual totals entry instead of a CSV/Excel upload.</span>
+    </label>
+
+    <div class="field-group" style="max-width:300px; margin-top:16px;">
+      <label>Report Month <span class="sub">(optional — filters out any uploaded rows from other months)</span></label>
+      <input type="month" id="reportMonthFilter">
+    </div>
+
+    <div class="btn-row">
+      <span></span>
+      <div class="right"><button class="btn btn-primary" onclick="goToStep(2)">Continue →</button></div>
+    </div>
+  </div>
+
+  <!-- ================= STEP 2 : DATA ================= -->
+  <div class="panel" id="panel-2">
+    <h2>Add your data</h2>
+    <div class="hint">Upload the Meta content export where you have it. For anything without a parser, type in the monthly totals — those fields will still show up in the final report.</div>
+
+    <!-- META UPLOAD -->
+    <div class="source-block" id="block-meta-upload">
+      <h3>Instagram / Facebook <span class="badge-auto">auto from file</span></h3>
+      <div class="upload-box" onclick="document.getElementById('metaFile').click()">
+        <input type="file" id="metaFile" accept=".csv,.xlsx,.xls" multiple onchange="handleMetaFile(event)">
+        <div class="u-title">Click to upload Meta content export(s) (.csv or .xlsx)</div>
+        <div class="u-sub">Meta Business Suite → Insights → Content → fix the columns first, tick: Views, Likes, Comments, Shares, Saves, Follows, Post type, Publish time → Export → pick the right month → pick the right Page. Instagram and Facebook export as separate files — select both at once (or upload one, then the other).</div>
+      </div>
+      <div class="upload-status" id="metaStatus"></div>
+      <div class="client-pick" id="clientPickWrap" style="display:none;">
+        <div class="field-group">
+          <label>This file has multiple accounts — which one(s) is this report for?</label>
+          <div id="clientPickerList" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+      </div>
+      <div class="field-group" style="max-width:300px; margin-top:12px;">
+        <label>New Followers Gained
+          <span class="tip">i<span class="tip-bubble">Meta's content export doesn't include follower growth — that's an account-level Audience metric, not a per-post one, so there's no file to auto-fill this from. Type it in from Meta's Audience insights (or the client) — it stays manual even when everything else above is auto.</span></span>
+        </label>
+        <input type="number" id="im_follows">
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-ghost" type="button" onclick="downloadTemplate()">⬇ Download blank Excel template</button>
+        <div class="small-note">Give this to a PO who doesn't have export access — they fill it in row-by-row (one row per post) and upload it right back into this same box. <b>Dates must be typed as YYYY-MM-DD</b> (e.g. 2026-06-17) — other formats like DD/MM/YYYY may not be read correctly.</div>
+      </div>
+    </div>
+
+    <!-- META MANUAL FALLBACK -->
+    <div class="source-block" id="block-meta-manual">
+      <h3>Instagram / Facebook <span class="badge-manual">manual — no access</span></h3>
+      <div class="hint" style="margin-bottom:12px;">Fill in a views number for each week the client posted — Total Views is added up from these automatically, so there's only one number to keep in sync.</div>
+      <div class="field-row3">
+        <div class="field-group is-auto" id="mmViewsWrap">
+          <label>Total Views <span class="auto-tag">AUTO</span>
+            <span class="tip">i<span class="tip-bubble">This is calculated automatically by adding up Week 01–05 below. You don't type this in — it just updates as you fill in the weeks.</span></span>
+          </label>
+          <input type="number" id="mm_views" readonly tabindex="-1">
+        </div>
+        <div class="field-group"><label>Posts Published</label><input type="number" id="mm_posts"></div>
+        <div class="field-group"><label>New Followers Gained</label><input type="number" id="mm_follows"></div>
+      </div>
+      <div class="field-group">
+        <label>Views by Week
+          <span class="tip">i<span class="tip-bubble">There are 5 slots because a calendar month doesn't line up evenly with weeks — some months spill a few days into a 5th week. Only fill in the weeks that actually happened this month; leave the rest blank and they're skipped.</span></span>
+          <span class="sub">(fill in whichever weeks apply — leave the rest blank)</span>
+        </label>
+      </div>
+      <div class="field-row3" style="margin-bottom:14px;">
+        <div class="field-group"><label>Week 01 — Total Views</label><input type="number" id="mm_wk1"></div>
+        <div class="field-group"><label>Week 02 — Total Views</label><input type="number" id="mm_wk2"></div>
+        <div class="field-group"><label>Week 03 — Total Views</label><input type="number" id="mm_wk3"></div>
+      </div>
+      <div class="field-row3">
+        <div class="field-group"><label>Week 04 — Total Views</label><input type="number" id="mm_wk4"></div>
+        <div class="field-group"><label>Week 05 — Total Views</label><input type="number" id="mm_wk5"></div>
+        <div class="field-group"></div>
+      </div>
+    </div>
+
+    <!-- TIKTOK MANUAL -->
+    <div class="source-block" id="block-tiktok">
+      <h3>TikTok <span class="badge-manual">manual — no parser yet</span>
+        <span class="tip">i<span class="tip-bubble">Type these in by hand normally. But if you upload the per-post file below, Views/Posts/Likes/Comments/Shares/Saves are recalculated from that file automatically — <b>whichever you did last wins</b>, so upload first, then check these before generating the report.</span></span>
+      </h3>
+      <div class="field-row3">
+        <div class="field-group" id="tt_views_wrap"><label>Total Views <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="tt_views"></div>
+        <div class="field-group" id="tt_posts_wrap"><label>Posts Published <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="tt_posts"></div>
+        <div class="field-group"><label>Total Reach <span class="tip">i<span class="tip-bubble">Reach isn't in per-post exports, so this always stays manual — type it in from the platform's own dashboard, whether or not you upload a file below.</span></span></label><input type="number" id="tt_reach"></div>
+      </div>
+      <div class="field-row3">
+        <div class="field-group" id="tt_likes_wrap"><label>Likes <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="tt_likes"></div>
+        <div class="field-group" id="tt_comments_wrap"><label>Comments <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="tt_comments"></div>
+        <div class="field-group" id="tt_shares_wrap"><label>Shares <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="tt_shares"></div>
+      </div>
+      <div class="field-row3">
+        <div class="field-group" id="tt_saves_wrap"><label>Saves <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="tt_saves"></div>
+        <div class="field-group"><label>Followers — current</label><input type="number" id="tt_foll_now"></div>
+        <div class="field-group"><label>Followers — last month</label><input type="number" id="tt_foll_prev"></div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-ghost" type="button" onclick="downloadTemplate()">⬇ Download blank Excel template</button>
+        <div class="small-note">One row per real post — not a single example row, or the chart/top content below will only show that one post. <b>Dates as YYYY-MM-DD</b> (e.g. 2026-06-17).</div>
+      </div>
+      <div class="upload-box" style="background:#fff; border-style:dashed;" onclick="document.getElementById('tt_file').click()">
+        <input type="file" id="tt_file" accept=".csv,.xlsx,.xls" multiple onchange="handleExtraFile(event,'tiktok','ttStatus')">
+        <div class="u-title">Upload the filled-in template (or any per-post dates)</div>
+        <div class="u-sub">Fills in Views/Posts/Likes/Comments/Shares/Saves above from this file, and unlocks Views by Week + Top Content. Select multiple files at once if you have more than one export. Skip it and those all stay manual/blank.</div>
+      </div>
+      <div class="upload-status" id="ttStatus"></div>
+    </div>
+
+    <!-- LINKEDIN MANUAL -->
+    <div class="source-block" id="block-linkedin">
+      <h3>LinkedIn <span class="badge-manual">manual — no parser yet</span>
+        <span class="tip">i<span class="tip-bubble">Type these in by hand normally. But if you upload the per-post file below, Posts/Likes/Comments/Shares are recalculated from that file automatically — <b>whichever you did last wins</b>, so upload first, then check these before generating the report.</span></span>
+      </h3>
+      <div class="small-note" style="margin-bottom:10px;">Views/Impressions aren't pooled into the Total Views figure for LinkedIn — not tracked here by design.</div>
+      <div class="field-row3">
+        <div class="field-group" id="li_posts_wrap"><label>Posts Published <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_posts"></div>
+        <div class="field-group" id="li_likes_wrap"><label>Reactions (Likes) <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_likes"></div>
+        <div class="field-group" id="li_comments_wrap"><label>Comments <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_comments"></div>
+      </div>
+      <div class="field-row3">
+        <div class="field-group" id="li_shares_wrap"><label>Shares <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_shares"></div>
+        <div class="field-group"><label>Followers — current</label><input type="number" id="li_foll_now"></div>
+        <div class="field-group"><label>Followers — last month</label><input type="number" id="li_foll_prev"></div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-ghost" type="button" onclick="downloadTemplate()">⬇ Download blank Excel template</button>
+        <div class="small-note">One row per real post — not a single example row, or the chart/top content below will only show that one post. <b>Dates as YYYY-MM-DD</b> (e.g. 2026-06-17).</div>
+      </div>
+      <div class="upload-box" style="background:#fff; border-style:dashed;" onclick="document.getElementById('li_file').click()">
+        <input type="file" id="li_file" accept=".csv,.xlsx,.xls" multiple onchange="handleExtraFile(event,'linkedin','liStatus')">
+        <div class="u-title">Upload the filled-in template (or any per-post dates)</div>
+        <div class="u-sub">Fills in Posts/Likes/Comments/Shares above from this file, and unlocks Views by Week + Top Content. Select multiple files at once if you have more than one export. Skip it and those all stay manual/blank.</div>
+      </div>
+      <div class="upload-status" id="liStatus"></div>
+    </div>
+
+    <!-- YOUTUBE MANUAL -->
+    <div class="source-block" id="block-youtube">
+      <h3>YouTube <span class="badge-manual">manual — no parser yet</span>
+        <span class="tip">i<span class="tip-bubble">Type these in by hand normally. But if you upload the per-post file below, Views/Posts/Likes/Comments/Shares are recalculated from that file automatically — <b>whichever you did last wins</b>, so upload first, then check these before generating the report.</span></span>
+      </h3>
+      <div class="field-row3">
+        <div class="field-group" id="yt_views_wrap"><label>Total Views <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="yt_views"></div>
+        <div class="field-group" id="yt_posts_wrap"><label>Posts Published <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="yt_posts"></div>
+        <div class="field-group"></div>
+      </div>
+      <div class="field-row3">
+        <div class="field-group" id="yt_likes_wrap"><label>Likes <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="yt_likes"></div>
+        <div class="field-group" id="yt_comments_wrap"><label>Comments <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="yt_comments"></div>
+        <div class="field-group" id="yt_shares_wrap"><label>Shares <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="yt_shares"></div>
+      </div>
+      <div class="field-row3">
+        <div class="field-group"><label>Subscribers — current</label><input type="number" id="yt_sub_now"></div>
+        <div class="field-group"><label>Subscribers — last month</label><input type="number" id="yt_sub_prev"></div>
+        <div class="field-group"></div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-ghost" type="button" onclick="downloadTemplate()">⬇ Download blank Excel template</button>
+        <div class="small-note">One row per real post — not a single example row, or the chart/top content below will only show that one post. <b>Dates as YYYY-MM-DD</b> (e.g. 2026-06-17).</div>
+      </div>
+      <div class="upload-box" style="background:#fff; border-style:dashed;" onclick="document.getElementById('yt_file').click()">
+        <input type="file" id="yt_file" accept=".csv,.xlsx,.xls" multiple onchange="handleExtraFile(event,'youtube','ytStatus')">
+        <div class="u-title">Upload the filled-in template (or any per-post dates)</div>
+        <div class="u-sub">Fills in Views/Posts/Likes/Comments/Shares above from this file, and unlocks Views by Week + Top Content. Select multiple files at once if you have more than one export. Skip it and those all stay manual/blank.</div>
+      </div>
+      <div class="upload-status" id="ytStatus"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goToStep(1)">← Back</button>
+      <div class="right"><button class="btn btn-primary" onclick="goToStep(3)">Continue →</button></div>
+    </div>
+  </div>
+
+  <!-- ================= STEP 3 : DETAILS ================= -->
+  <div class="panel" id="panel-3">
+    <h2>Fill in the rest</h2>
+    <div class="hint">Everything here is manual by design — leave anything blank and it'll simply show blank on the final report.</div>
+
+    <div class="field-row">
+      <div class="field-group"><label>Client Name</label><input type="text" id="d_client" placeholder="e.g. Dinesh Saparamadu"></div>
+      <div class="field-group"><label>Report Period</label><input type="text" id="d_period" placeholder="e.g. June 2026"></div>
+    </div>
+
+    <div class="field-group" style="max-width:340px;"><label>Total Views — same period last month
+      <span class="tip">i<span class="tip-bubble">This is a different number from Step 2's Total Views. Step 2 is <b>this month's</b> views (auto or typed there). This field is <b>last month's</b> total, typed here by hand — there's no automated source for it. It only powers the ▲/▼ trend arrow, nothing else.</span></span>
+      <span class="sub">(optional, powers the ▲/▼ arrow)</span></label><input type="number" id="d_prevviews"></div>
+
+    <div class="field-row3">
+      <div class="field-group"><label>90-Day Goal — Target</label><input type="number" id="d_goaltarget"></div>
+      <div class="field-group"><label>90-Day Goal — Achieved</label><input type="number" id="d_goalcurrent"></div>
+      <div class="field-group"><label>90-Day Goal — Metric <span class="sub">(e.g. Follower growth)</span></label><input type="text" id="d_goalmetric" placeholder="e.g. Follower growth"></div>
+    </div>
+    <div class="field-group" style="max-width:340px;"><label>Current Follower Audience</label><input type="number" id="d_audience"></div>
+
+    <div class="field-group"><label>Implementations &amp; Wins</label></div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Ads Updates</label>
+        <select id="d_adsstatus"><option value="">— not set —</option><option value="yes">Started / updated</option><option value="no">Not started</option></select>
+        <input type="text" id="d_adsnote" placeholder="Short note" style="margin-top:6px;">
+      </div>
+      <div class="field-group">
+        <label>Funnel Setup</label>
+        <select id="d_funnelstatus"><option value="">— not set —</option><option value="yes">Built / live</option><option value="no">Not started</option></select>
+        <input type="text" id="d_funnelnote" placeholder="Short note" style="margin-top:6px;">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>LP Setup</label>
+        <select id="d_lpstatus"><option value="">— not set —</option><option value="yes">Built / live</option><option value="no">Not started</option></select>
+        <input type="text" id="d_lpnote" placeholder="Short note" style="margin-top:6px;">
+      </div>
+      <div class="field-group"></div>
+    </div>
+
+    <div class="field-group"><label>Other Win</label><textarea id="d_otherwin" placeholder="One standout moment this month"></textarea></div>
+
+    <div class="field-group">
+      <label>Next-Month Priorities</label>
+      <div class="priorities-input"><span class="num">01</span><input type="text" id="d_p1" placeholder="Priority one"></div>
+      <div class="priorities-input"><span class="num">02</span><input type="text" id="d_p2" placeholder="Priority two"></div>
+      <div class="priorities-input"><span class="num">03</span><input type="text" id="d_p3" placeholder="Priority three"></div>
+    </div>
+
+    <div class="field-group" id="manualTopPostsWrap" style="display:none;">
+      <label>Top Performing Content <span class="sub">(no per-post file was uploaded — enter up to 3 manually)</span></label>
+      <div class="field-row3" style="margin-bottom:6px;"><input type="text" id="tp1_title" placeholder="Post title"><input type="number" id="tp1_views" placeholder="Views"><input type="number" id="tp1_likes" placeholder="Likes"></div>
+      <div class="field-row3" style="margin-bottom:6px;"><input type="text" id="tp2_title" placeholder="Post title"><input type="number" id="tp2_views" placeholder="Views"><input type="number" id="tp2_likes" placeholder="Likes"></div>
+      <div class="field-row3"><input type="text" id="tp3_title" placeholder="Post title"><input type="number" id="tp3_views" placeholder="Views"><input type="number" id="tp3_likes" placeholder="Likes"></div>
+    </div>
+    <div class="field-group" id="autoTopPostsNote" style="display:none;">
+      <label>Top Performing Content <span class="sub">· auto</span></label>
+      <div class="small-note" style="margin-top:0;">Per-post dated data was found in your upload(s) — this section will be pulled automatically on the final report. Nothing to fill in here.</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="goToStep(2)">← Back</button>
+      <div class="right"><button class="btn btn-lime" onclick="generateReport()">Generate Report →</button></div>
+    </div>
+  </div>
+
+  <!-- ================= STEP 4 : REPORT ================= -->
+  <div class="panel" id="panel-4">
+    <div id="reportToolbar">
+      <button class="btn btn-ghost" onclick="goToStep(3)">← Back to edit</button>
+      <div class="right" style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:11px; color:var(--muted);">Nothing happening? Press Ctrl+P (Cmd+P on Mac) instead</span>
+        <button class="btn btn-primary" onclick="printReport()">🖨 Print / Save as PDF</button>
+      </div>
+    </div>
+    <div id="reportRoot"></div>
+  </div>
+
+</div>
+
+<script>
+/* ================= STATE ================= */
+const STATE = {
+  channels:{instagram:true, facebook:true, tiktok:false, linkedin:false, youtube:false},
+  noMeta:false,
+  metaRowsAll:[],     // all normalized rows from primary Meta upload
+  metaClientKeys:null, // which 'client' value(s) are selected, if multiple accounts in one file
+  extraRows:{ tiktok:[], linkedin:[], youtube:[] }, // optional per-post uploads — trend/top-content only, never summed into totals
+};
+const DRAFT_KEY = 'accelerate_report_draft_v1';
+
+/* ================= STEP NAV ================= */
+function goToStep(n){
+  for(let i=1;i<=4;i++){
+    document.getElementById('panel-'+i).classList.toggle('active', i===n);
+    const pill = document.getElementById('pill-'+i);
+    pill.classList.toggle('active', i===n);
+    pill.classList.toggle('done', i<n);
+  }
+  if(n===2) refreshStep2Blocks();
+  if(n===3) refreshStep3TopContent();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+document.querySelectorAll('.chip input').forEach(cb=>{
+  cb.addEventListener('change', ()=>{
+    STATE.channels[cb.dataset.ch] = cb.checked;
+    cb.closest('.chip').classList.toggle('checked', cb.checked);
+  });
+  cb.closest('.chip').classList.toggle('checked', cb.checked);
+});
+document.getElementById('noMetaAccess').addEventListener('change', e=>{ STATE.noMeta = e.target.checked; });
+
+function refreshStep2Blocks(){
+  const showMetaUpload = (STATE.channels.instagram || STATE.channels.facebook) && !STATE.noMeta;
+  const showMetaManual = (STATE.channels.instagram || STATE.channels.facebook) && STATE.noMeta;
+  toggleBlock('block-meta-upload', showMetaUpload);
+  toggleBlock('block-meta-manual', showMetaManual);
+  toggleBlock('block-tiktok', STATE.channels.tiktok);
+  toggleBlock('block-linkedin', STATE.channels.linkedin);
+  toggleBlock('block-youtube', STATE.channels.youtube);
+}
+
+/* ================= STEP 3: TOP CONTENT AUTO/MANUAL SWITCH ================= */
+function hasDatedDataAnywhere(){
+  const sources = [];
+  if((STATE.channels.instagram||STATE.channels.facebook) && !STATE.noMeta) sources.push(STATE.metaRowsAll);
+  if(STATE.channels.tiktok) sources.push(STATE.extraRows.tiktok);
+  if(STATE.channels.linkedin) sources.push(STATE.extraRows.linkedin);
+  if(STATE.channels.youtube) sources.push(STATE.extraRows.youtube);
+  return sources.some(rows => (rows||[]).some(r=>r.date));
+}
+function refreshStep3TopContent(){
+  const manualWrap = document.getElementById('manualTopPostsWrap');
+  const autoNote = document.getElementById('autoTopPostsNote');
+  if(!manualWrap || !autoNote) return;
+  if(hasDatedDataAnywhere()){
+    manualWrap.style.display = 'none';
+    autoNote.style.display = 'block';
+  } else {
+    manualWrap.style.display = 'block';
+    autoNote.style.display = 'none';
+  }
+}
+function toggleBlock(id, show){ document.getElementById(id).classList.toggle('show', !!show); }
+
+/* ================= META-MANUAL: TOTAL VIEWS AUTO-SUMMED FROM WEEK 1-5 ================= */
+// Total Views is never typed directly in "no Meta access" mode — it's always the sum of
+// whichever Week 1-5 fields are filled in, so there's exactly one number to keep in sync.
+function recalcMetaManualViews(){
+  const total = [1,2,3,4,5].reduce((sum,n)=> sum + (Number(document.getElementById('mm_wk'+n).value)||0), 0);
+  document.getElementById('mm_views').value = total;
+}
+['mm_wk1','mm_wk2','mm_wk3','mm_wk4','mm_wk5'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', recalcMetaManualViews);
+});
+
+/* ================= AUTO-FILL TOTALS FROM OPTIONAL PER-POST FILES ================= */
+// When a per-post file is uploaded for TikTok/LinkedIn/YouTube, its totals become the
+// source of truth for that channel's stat fields — no more separately-typed number that
+// can silently disagree with the chart/top-content below. Fields lock (green, read-only)
+// while backed by a file; unlock again if the file is removed/rejected.
+const AUTO_FIELD_MAP = {
+  tiktok:   { views:'tt_views', posts:'tt_posts', likes:'tt_likes', comments:'tt_comments', shares:'tt_shares', saves:'tt_saves' },
+  linkedin: { posts:'li_posts', likes:'li_likes', comments:'li_comments', shares:'li_shares' },
+  youtube:  { views:'yt_views', posts:'yt_posts', likes:'yt_likes', comments:'yt_comments', shares:'yt_shares' },
+};
+function setAutoField(id, value){
+  const input = document.getElementById(id);
+  const wrap = document.getElementById(id+'_wrap');
+  input.value = value;
+  input.readOnly = true;
+  input.tabIndex = -1;
+  if(wrap) wrap.classList.add('is-auto');
+}
+function unlockAutoFields(key){
+  const map = AUTO_FIELD_MAP[key];
+  Object.values(map).forEach(id=>{
+    const input = document.getElementById(id);
+    const wrap = document.getElementById(id+'_wrap');
+    input.readOnly = false;
+    input.tabIndex = 0;
+    if(wrap) wrap.classList.remove('is-auto');
+  });
+}
+function applyAutoTotals(key, rows){
+  const map = AUTO_FIELD_MAP[key];
+  const sums = {views:0, posts:0, likes:0, comments:0, shares:0, saves:0};
+  rows.forEach(r=>{ sums.views+=r.views; sums.likes+=r.likes; sums.comments+=r.comments; sums.shares+=r.shares; sums.saves+=r.saves; sums.posts+=1; });
+  Object.keys(map).forEach(field=> setAutoField(map[field], sums[field]));
+}
+
+/* ================= HEADER NORMALIZATION ================= */
+// Note: Reach is collected as a manual monthly total (Meta-manual / TikTok fields) per the
+// report spec, not parsed from per-post CSV/Excel uploads — so there's no 'reach' key here.
+const HEADER_MAP = {
+  'post id':'postid',
+  'account username':'client','account name':'client','platform':'client',
+  'description':'title','post title':'title','post':'title',
+  'post type':'posttype','type':'posttype',
+  'publish time':'date','publish date':'date','date':'date','publish date (yyyy-mm-dd)':'date',
+  'views':'views','video views':'views',
+  'likes':'likes','reactions':'likes',
+  'comments':'comments',
+  'shares':'shares',
+  'saves':'saves',
+  'follows':'follows','new follows':'follows','new followers':'follows',
+};
+
+// Handles thousands-separator formatted numbers (e.g. "1,234") that would otherwise silently become 0.
+function parseNum(v){
+  if(v===null||v===undefined||v==='') return 0;
+  if(typeof v === 'number') return isNaN(v)?0:v;
+  const cleaned = String(v).replace(/[,\s]/g,'');
+  const n = Number(cleaned);
+  return isNaN(n)?0:n;
+}
+
+function normalizeRow(raw){
+  const out = {client:'', title:'', posttype:'', date:null, views:0, likes:0, comments:0, shares:0, saves:0, follows:0, postid:''};
+  Object.keys(raw).forEach(k=>{
+    const key = HEADER_MAP[k.trim().toLowerCase()];
+    if(!key) return;
+    const v = raw[k];
+    if(['views','likes','comments','shares','saves','follows'].includes(key)){
+      out[key] = parseNum(v);
+    } else if(key==='date'){
+      // Meta's real export has BOTH "Publish time" (a real per-post timestamp) and a
+      // separate "Date" column that just holds the report-period label (e.g. "Lifetime"),
+      // not an actual date. Both map here since either can be the real timestamp depending
+      // on export type — so only accept a column's value if it actually parses; never let
+      // a later, invalid column (like that "Lifetime" label) blank out an already-valid date.
+      const d = v instanceof Date ? v : new Date(v);
+      if(!isNaN(d.getTime())) out.date = d;
+    } else {
+      let val = (v==null? '' : String(v));
+      if(key==='title') val = shortenTitle(val);
+      out[key] = val;
+    }
+  });
+  return out;
+}
+
+// Meta's export often puts the full multi-paragraph caption (hashtags, line breaks, emoji)
+// in the column we read as the post title — that's fine as raw data, but in the report it
+// blows up the Top Content table into a wall of text. Trim to just the first line, then cap
+// the length, so the report shows a clean, recognizable label instead of the whole caption.
+function shortenTitle(s){
+  if(!s) return s;
+  let t = s.split(/\r?\n/)[0].trim();
+  const MAX = 90;
+  if(t.length > MAX) t = t.slice(0, MAX).trim() + '…';
+  return t;
+}
+
+/* ================= REPORT MONTH FILTER ================= */
+// Strips any dated rows that fall outside the selected Report Month, so a "last 90 days"
+// export doesn't silently inflate this month's totals.
+function getReportMonthFilter(){
+  const el = document.getElementById('reportMonthFilter');
+  return (el && el.value) ? el.value : null; // "YYYY-MM" or null
+}
+function monthLabel(v){
+  if(!v) return '';
+  const [y,m] = v.split('-').map(Number);
+  return new Date(y,m-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+}
+function filterToReportMonth(rows){
+  const rm = getReportMonthFilter();
+  if(!rm) return {rows, excluded:0};
+  const [y,m] = rm.split('-').map(Number);
+  const kept = [];
+  let excluded = 0;
+  rows.forEach(r=>{
+    if(r.date && (r.date.getFullYear()!==y || (r.date.getMonth()+1)!==m)){
+      excluded++;
+    } else {
+      kept.push(r);
+    }
+  });
+  return {rows:kept, excluded};
+}
+
+// Minimum number of *distinct* recognized fields (views, likes, title, date, etc.) that must
+// appear in a file's header row before we trust it as real content data. Column names like
+// "Date" or "Type" are common enough to accidentally collide with an unrelated spreadsheet —
+// this stops one stray match from silently getting treated as a real post-performance export.
+const MIN_RECOGNIZED_FIELDS = 3;
+
+// Meta's own exports sometimes have a title/date line above the real header row — scanning
+// just row 0 would silently match nothing (including the date column that drives Views by
+// Week). Scan the first several rows and use whichever one matches the most known fields.
+const HEADER_SCAN_ROWS = 10;
+function findHeaderRow(sheet){
+  const raw = XLSX.utils.sheet_to_json(sheet, {header:1, defval:null});
+  let best = {rowIndex:0, matched:[]};
+  for(let i=0;i<Math.min(HEADER_SCAN_ROWS, raw.length);i++){
+    const row = raw[i] || [];
+    const matched = [];
+    row.forEach(h=>{
+      if(h==null || h==='') return;
+      const key = HEADER_MAP[String(h).trim().toLowerCase()];
+      if(key) matched.push({raw:String(h), mapped:key});
+    });
+    const uniqueCount = new Set(matched.map(m=>m.mapped)).size;
+    const bestUniqueCount = new Set(best.matched.map(m=>m.mapped)).size;
+    if(uniqueCount > bestUniqueCount){ best = {rowIndex:i, matched}; }
+  }
+  return best;
+}
+function detectMatchedHeaders(sheet){
+  return findHeaderRow(sheet).matched;
+}
+
+// Detects the same post appearing more than once — e.g. a PO accidentally selecting the
+// same export twice, or two files with overlapping date ranges that share some posts.
+// Post ID (when the export includes one) is the most reliable match; otherwise falls back
+// to title + date + views, which is very unlikely to collide for two genuinely different posts.
+function dedupeRows(rows){
+  const seen = new Set();
+  const unique = [];
+  let duplicates = 0;
+  rows.forEach(r=>{
+    const key = r.postid ? 'id:'+r.postid : 'k:'+r.title+'|'+(r.date?r.date.getTime():'')+'|'+r.views;
+    if(seen.has(key)){ duplicates++; return; }
+    seen.add(key);
+    unique.push(r);
+  });
+  return {rows:unique, duplicates};
+}
+
+/* Wraps parseWorkbookFile to handle multiple files selected at once (e.g. a PO exporting
+   Instagram and Facebook as two separate CSVs and selecting both together). Every file is
+   parsed independently and their rows merged; a file that fails (wrong columns, unreadable)
+   doesn't block the others — it's just reported separately so the PO knows exactly which
+   file needs fixing, rather than the whole upload silently failing or silently losing data. */
+function parseWorkbookFiles(fileList, onDone, onError){
+  const files = Array.from(fileList || []);
+  if(!files.length) return;
+  let allRows = [];
+  const fileResults = []; // {name, usedSheets, rowCount, error}
+  let remaining = files.length;
+
+  files.forEach(file=>{
+    parseWorkbookFile(file, (rows, sheetsMeta)=>{
+      allRows = allRows.concat(rows);
+      fileResults.push({name:file.name, usedSheets:(sheetsMeta&&sheetsMeta.usedSheets)||[], rowCount:rows.length, error:null});
+      settle();
+    }, (err)=>{
+      fileResults.push({name:file.name, usedSheets:[], rowCount:0, error:err.message});
+      settle();
+    });
+  });
+
+  function settle(){
+    remaining--;
+    if(remaining>0) return;
+    if(!allRows.length){
+      const detail = fileResults.map(f=>f.name+': '+(f.error||'no usable rows')).join(' | ');
+      onError(new Error('None of the '+files.length+' file(s) could be read — '+detail));
+      return;
+    }
+    const {rows:deduped, duplicates} = dedupeRows(allRows);
+    onDone(deduped, fileResults, duplicates);
+  }
+}
+
+/* shared parser used by every upload box (primary Meta + the 3 optional per-post uploads)
+   Scans EVERY sheet tab in the workbook, not just the first — a PO combining exports from
+   multiple accounts/platforms into one file (e.g. an "Instagram" tab + a "Facebook" tab)
+   would otherwise have the second tab silently dropped with no warning at all. Any tab that
+   doesn't look like post data (wrong columns, a notes/cover tab, etc.) is quietly skipped
+   rather than failing the whole upload — but the PO is told exactly which tabs were used. */
+function parseWorkbookFile(file, onDone, onError){
+  const reader = new FileReader();
+  const isCsv = /\.csv$/i.test(file.name||'');
+  reader.onload = function(e){
+    try{
+      // CSVs are plain text — reading them as raw bytes lets SheetJS guess the encoding,
+      // which mangles emoji/special characters (multi-byte UTF-8 sequences) into garbage
+      // like "ð". Decoding as UTF-8 text ourselves first sidesteps that guess entirely.
+      // XLSX/XLS are binary (zipped XML) and must stay as a raw byte array.
+      const wb = isCsv
+        ? XLSX.read(new TextDecoder('utf-8').decode(new Uint8Array(e.target.result)), {type:'string', cellDates:true})
+        : XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+
+      let allRows = [];
+      const usedSheets = [];
+      const skippedSheets = [];
+      wb.SheetNames.forEach(name=>{
+        const sheet = wb.Sheets[name];
+        const {rowIndex, matched} = findHeaderRow(sheet);
+        const uniqueFields = new Set(matched.map(m=>m.mapped));
+        if(uniqueFields.size < MIN_RECOGNIZED_FIELDS){ skippedSheets.push(name); return; }
+        const rows = XLSX.utils.sheet_to_json(sheet, {defval:null, range:rowIndex});
+        const normalized = rows.map(normalizeRow).filter(r=>r.views||r.likes||r.title);
+        if(normalized.length){ allRows = allRows.concat(normalized); usedSheets.push(name); }
+        else { skippedSheets.push(name); }
+      });
+
+      if(!allRows.length){
+        const scope = wb.SheetNames.length>1 ? `any of the ${wb.SheetNames.length} sheet tabs (${wb.SheetNames.join(', ')})` : 'the file';
+        onError(new Error(`This doesn't look like a content export — no recognizable post data found in ${scope}. Expected columns like Views, Likes, Post Title, Publish Date. Check you uploaded the right file.`));
+        return;
+      }
+      onDone(allRows, {usedSheets, skippedSheets, totalSheets:wb.SheetNames.length});
+    }catch(err){ onError(err); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ================= PRIMARY META UPLOAD ================= */
+function handleMetaFile(evt){
+  const files = evt.target.files;
+  const statusEl = document.getElementById('metaStatus');
+  if(!files || !files.length){ return; }
+  statusEl.className='upload-status'; statusEl.textContent='Reading file'+(files.length>1?'s':'')+'…';
+
+  function rejectMetaUpload(message){
+    STATE.metaRowsAll = [];
+    STATE.metaClientKeys = null;
+    document.getElementById('clientPickWrap').style.display = 'none';
+    document.getElementById('clientPickerList').innerHTML = '';
+    statusEl.className = 'upload-status err';
+    statusEl.textContent = message + ' Nothing is loaded for this channel until a file passes — the report will show this section blank, not old data.';
+    saveDraft();
+  }
+
+  parseWorkbookFiles(files, (normalized, fileResults, duplicates)=>{
+    const failed = fileResults.filter(f=>f.error);
+    const fileNote = fileResults.length>1 ? ' from '+fileResults.length+' files'+(failed.length?' ('+failed.length+' failed — see below)':'')+':  '+fileResults.map(f=>f.error?(f.name+' ✗'):(f.name+' ('+f.rowCount+' rows)')).join(', ') : '';
+    const dupeWarning = duplicates ? ' ⚠ '+duplicates+' duplicate post'+(duplicates===1?'':'s')+' found and skipped (same post appeared in more than one file/sheet) — check you didn\'t upload overlapping exports.' : '';
+    const {rows:filtered, excluded} = filterToReportMonth(normalized);
+    if(!filtered.length){
+      rejectMetaUpload('All '+normalized.length+' rows fall outside '+monthLabel(getReportMonthFilter())+' — check the file'+(files.length>1?'s':'')+' or the Report Month field on Step 1.');
+      return;
+    }
+    STATE.metaRowsAll = filtered;
+    const clients = [...new Set(filtered.map(r=>r.client).filter(Boolean))];
+    const wrap = document.getElementById('clientPickWrap');
+    const listEl = document.getElementById('clientPickerList');
+    listEl.innerHTML='';
+    if(clients.length>1){
+      clients.forEach(c=>{
+        const n = filtered.filter(r=>r.client===c).length;
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--text);';
+        row.innerHTML = '<input type="checkbox" value="'+esc(c)+'" checked onchange="onClientPicked()"> '+esc(c)+' ('+n+' posts)';
+        listEl.appendChild(row);
+      });
+      wrap.style.display='block';
+      STATE.metaClientKeys = clients.slice();
+    } else {
+      wrap.style.display='none';
+      STATE.metaClientKeys = clients.length ? [clients[0]] : null;
+    }
+    statusEl.className = 'upload-status ' + ((failed.length||duplicates) ? 'warn' : 'ok');
+    statusEl.textContent = (failed.length||duplicates?'':'✓ ')+'Loaded '+filtered.length+' rows'+fileNote+(excluded? ' ('+excluded+' excluded — outside Report Month)':'')+(clients.length>1?' across '+clients.length+' accounts — pick which to include above.':'.')+dupeWarning;
+    saveDraft();
+  }, (err)=>{
+    rejectMetaUpload(err.message);
+  });
+}
+function onClientPicked(){
+  STATE.metaClientKeys = [...document.querySelectorAll('#clientPickerList input:checked')].map(cb=>cb.value);
+  saveDraft();
+}
+
+/* ================= OPTIONAL PER-POST UPLOADS (TikTok / LinkedIn / Meta-manual) ================= */
+/* These never feed the stat totals — totals for these channels always come from the manual fields.
+   They only unlock Views by Week, Engagement Rate Trend and Top Performing Content. */
+function handleExtraFile(evt, key, statusId){
+  const files = evt.target.files;
+  const statusEl = document.getElementById(statusId);
+  if(!files || !files.length){ return; }
+  statusEl.className='upload-status'; statusEl.textContent='Reading file'+(files.length>1?'s':'')+'…';
+  function rejectExtraUpload(message){
+    STATE.extraRows[key] = [];
+    unlockAutoFields(key);
+    statusEl.className = 'upload-status err';
+    statusEl.textContent = message + ' Nothing is loaded for this channel until a file passes — the totals above stay whatever you last typed.';
+    saveDraft();
+  }
+
+  parseWorkbookFiles(files, (normalized, fileResults, duplicates)=>{
+    const failed = fileResults.filter(f=>f.error);
+    const fileNote = fileResults.length>1 ? ' from '+fileResults.length+' files'+(failed.length?' ('+failed.length+' failed — see below)':'')+':  '+fileResults.map(f=>f.error?(f.name+' ✗'):(f.name+' ('+f.rowCount+' rows)')).join(', ') : '';
+    const dupeWarning = duplicates ? ' ⚠ '+duplicates+' duplicate post'+(duplicates===1?'':'s')+' found and skipped (same post appeared in more than one file/sheet) — check you didn\'t upload overlapping exports.' : '';
+    const {rows:filtered, excluded} = filterToReportMonth(normalized);
+    if(!filtered.length){
+      rejectExtraUpload('All '+normalized.length+' rows fall outside '+monthLabel(getReportMonthFilter())+' — check the file'+(files.length>1?'s':'')+' or the Report Month field on Step 1.');
+      return;
+    }
+    if(key==='linkedin'){ filtered.forEach(r=>{ r.views = 0; }); } // Views/Impressions intentionally not tracked for LinkedIn
+    STATE.extraRows[key] = filtered;
+    applyAutoTotals(key, filtered);
+    const thinWarning = filtered.length===1 ? ' ⚠ Only 1 dated post found — check you uploaded the full month, not a single example row.' : '';
+    statusEl.className = 'upload-status ' + ((thinWarning||failed.length||duplicates) ? 'warn' : 'ok');
+    statusEl.textContent = (thinWarning||failed.length||duplicates?'':'✓ ')+'Loaded '+filtered.length+' dated post'+(filtered.length===1?'':'s')+fileNote+(excluded? ' ('+excluded+' excluded — outside Report Month)':'')+' — totals above now come from this file.'+thinWarning+dupeWarning;
+    saveDraft();
+  }, (err)=>{
+    rejectExtraUpload(err.message);
+  });
+}
+
+/* ================= TEMPLATE DOWNLOAD ================= */
+function downloadTemplate(){
+  const headers = ['Platform','Post Title','Post Type','Publish Date (YYYY-MM-DD)','Views','Likes','Comments','Shares','Saves'];
+  const example = ['Instagram','5 books that changed how I think','Reel','2026-06-17',4571,159,0,53,119];
+  const blank = ['','','','','','','','',''];
+  const aoa = [headers, example, blank, blank, blank];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Content');
+  XLSX.writeFile(wb, 'Accelerate_Report_Template.xlsx');
+}
+
+/* ================= HELPERS ================= */
+function val(v){ return (v===undefined||v===null||v==='' || Number.isNaN(v)) ? '' : v; }
+function numOrNull(id){ const v = document.getElementById(id).value; return v===''? null : Number(v); }
+function txt(id){ return document.getElementById(id).value.trim(); }
+function fmt(n){ return (n===null||n===undefined||n==='') ? '' : Number(n).toLocaleString(); }
+// ISO-8601 week key (Monday-Sunday weeks, week 1 = the week containing the year's first
+// Thursday) — matches the "ISO week" grouping the report spec calls for, instead of chopping
+// the month into blind 7-day chunks starting from the 1st.
+function weekBucketKey(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const isoYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const isoWeekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return isoYear + '-W' + String(isoWeekNum).padStart(2,'0');
+}
+// Escapes user- or file-supplied text before it's inserted into the report's HTML.
+function esc(s){
+  if(s===null||s===undefined) return '';
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ================= AGGREGATION ================= */
+function computeAggregates(){
+  const sums = {views:0, likes:0, comments:0, shares:0, saves:0, follows:0, posts:0, reach:0};
+  const weeklyMap = {};
+  const postTypeCounts = {};
+
+  let datedPosts = []; // pooled across every source that has per-post dates — trend/top-content only
+  let hasDatedRows = false;
+
+  function foldIntoWeeklyAndPool(rows, channelName){
+    rows.forEach(r=>{
+      if(r.posttype) postTypeCounts[r.posttype] = (postTypeCounts[r.posttype]||0)+1;
+      if(r.date){
+        hasDatedRows = true;
+        const wk = weekBucketKey(r.date);
+        if(!weeklyMap[wk]) weeklyMap[wk] = {views:0, posts:0};
+        const w = weeklyMap[wk];
+        w.views+=r.views; w.posts+=1;
+        datedPosts.push({...r, channel: r.client || channelName});
+      }
+    });
+  }
+
+  // Meta primary upload — this is both totals AND trend/top-content source
+  if((STATE.channels.instagram||STATE.channels.facebook) && !STATE.noMeta){
+    sums.follows += Number(document.getElementById('im_follows').value)||0;
+    if(STATE.metaRowsAll.length){
+      const rows = (STATE.metaClientKeys && STATE.metaClientKeys.length) ? STATE.metaRowsAll.filter(r=>STATE.metaClientKeys.includes(r.client)) : STATE.metaRowsAll;
+      rows.forEach(r=>{
+        sums.views+=r.views; sums.likes+=r.likes; sums.comments+=r.comments;
+        sums.shares+=r.shares; sums.saves+=r.saves; sums.follows+=r.follows; sums.posts+=1;
+      });
+      foldIntoWeeklyAndPool(rows, 'Instagram/Facebook');
+    }
+  }
+
+  // Meta manual fallback — totals always manual; weekly views are typed in directly (Week 1-5), no file needed.
+  if((STATE.channels.instagram||STATE.channels.facebook) && STATE.noMeta){
+    sums.views += Number(document.getElementById('mm_views').value)||0;
+    sums.follows += Number(document.getElementById('mm_follows').value)||0;
+    sums.posts += Number(document.getElementById('mm_posts').value)||0;
+  }
+
+  // TikTok — totals always manual; followers computed as current − last month
+  if(STATE.channels.tiktok){
+    sums.views += Number(document.getElementById('tt_views').value)||0;
+    sums.likes += Number(document.getElementById('tt_likes').value)||0;
+    sums.comments += Number(document.getElementById('tt_comments').value)||0;
+    sums.shares += Number(document.getElementById('tt_shares').value)||0;
+    sums.saves += Number(document.getElementById('tt_saves').value)||0;
+    sums.reach += Number(document.getElementById('tt_reach').value)||0;
+    sums.posts += Number(document.getElementById('tt_posts').value)||0;
+    const ttNow = document.getElementById('tt_foll_now').value, ttPrev = document.getElementById('tt_foll_prev').value;
+    if(ttNow!=='' && ttPrev!=='') sums.follows += (Number(ttNow)-Number(ttPrev));
+    foldIntoWeeklyAndPool(STATE.extraRows.tiktok, 'TikTok');
+  }
+
+  // LinkedIn — Views intentionally not tracked (skipped); totals manual; followers = current − last month
+  if(STATE.channels.linkedin){
+    sums.likes += Number(document.getElementById('li_likes').value)||0;
+    sums.comments += Number(document.getElementById('li_comments').value)||0;
+    sums.shares += Number(document.getElementById('li_shares').value)||0;
+    sums.posts += Number(document.getElementById('li_posts').value)||0;
+    const liNow = document.getElementById('li_foll_now').value, liPrev = document.getElementById('li_foll_prev').value;
+    if(liNow!=='' && liPrev!=='') sums.follows += (Number(liNow)-Number(liPrev));
+    foldIntoWeeklyAndPool(STATE.extraRows.linkedin, 'LinkedIn'); // views are zeroed at upload time for this channel
+  }
+
+  // YouTube — totals always manual; subscribers computed as current − last month
+  if(STATE.channels.youtube){
+    sums.views += Number(document.getElementById('yt_views').value)||0;
+    sums.likes += Number(document.getElementById('yt_likes').value)||0;
+    sums.comments += Number(document.getElementById('yt_comments').value)||0;
+    sums.shares += Number(document.getElementById('yt_shares').value)||0;
+    sums.posts += Number(document.getElementById('yt_posts').value)||0;
+    const ytNow = document.getElementById('yt_sub_now').value, ytPrev = document.getElementById('yt_sub_prev').value;
+    if(ytNow!=='' && ytPrev!=='') sums.follows += (Number(ytNow)-Number(ytPrev));
+    foldIntoWeeklyAndPool(STATE.extraRows.youtube, 'YouTube');
+  }
+
+  // Weekly array — views + post count only (Engagement Rate/Trend no longer part of the report)
+  let weekly = [];
+  if(hasDatedRows){
+    const keys = Object.keys(weeklyMap).sort();
+    weekly = keys.map((k,i)=>{
+      const w = weeklyMap[k];
+      return { label:'Week '+(i+1), views:w.views, posts:w.posts };
+    });
+  }
+
+  // Fold in the No-Meta-Access manual weekly views (Week 1-5), positionally — this is the
+  // only weekly source for that path now, since there's no per-post file anymore.
+  // Fills every slot (even blank weeks, as 0) once any week has a value, so the array stays
+  // dense — a sparse array here turns Math.max(...) into NaN and breaks every bar's height.
+  let hasManualWeeks = false;
+  if((STATE.channels.instagram||STATE.channels.facebook) && STATE.noMeta){
+    const manualWeeks = [1,2,3,4,5].map(n => Number(document.getElementById('mm_wk'+n).value)||0);
+    if(manualWeeks.some(v=>v>0)){
+      hasManualWeeks = true;
+      for(let i=0;i<5;i++){
+        if(!weekly[i]) weekly[i] = { label:'Week '+(i+1), views:0, posts:0 };
+        weekly[i].views += manualWeeks[i];
+      }
+    }
+  }
+
+  // Weekly source label — the chart can be fed by dated per-post rows (auto), the No-Meta-
+  // Access manual weekly fields (manual), or both at once if multiple channels are active.
+  let weeklySourceLabel = '';
+  if(hasDatedRows && hasManualWeeks) weeklySourceLabel = 'auto + manual';
+  else if(hasDatedRows) weeklySourceLabel = 'auto from post data';
+  else if(hasManualWeeks) weeklySourceLabel = 'manual (weekly entries)';
+
+  // Top posts: from any pooled dated rows if present, else manual entries
+  let topPosts = [];
+  let topPostsSource = '';
+  if(datedPosts.length){
+    topPosts = [...datedPosts].sort((a,b)=>b.views-a.views).slice(0,3).map(p=>({title:p.title||'(untitled post)', views:p.views, likes:p.likes, posttype:p.posttype, date:p.date, channel:p.channel}));
+    topPostsSource = 'auto';
+  } else {
+    [['tp1_title','tp1_views','tp1_likes'],['tp2_title','tp2_views','tp2_likes'],['tp3_title','tp3_views','tp3_likes']].forEach(([t,v,l])=>{
+      const title = txt(t);
+      if(title){
+        topPosts.push({title, views:Number(document.getElementById(v).value)||0, likes:Number(document.getElementById(l).value)||0});
+      }
+    });
+    if(topPosts.length) topPostsSource = 'manual';
+  }
+
+  // format mix text
+  let formatMixText = '';
+  const typeKeys = Object.keys(postTypeCounts);
+  if(typeKeys.length){
+    const totalTyped = typeKeys.reduce((a,k)=>a+postTypeCounts[k],0);
+    const sorted = typeKeys.sort((a,b)=>postTypeCounts[b]-postTypeCounts[a]);
+    if(sorted.length===1){
+      formatMixText = '100% '+sorted[0]+(sorted[0].toLowerCase().includes('reel')?'s':'') ;
+    } else {
+      const top = sorted[0];
+      const pctTop = Math.round(postTypeCounts[top]/totalTyped*100);
+      formatMixText = pctTop+'% '+top;
+    }
+  }
+
+  return {sums, weekly, weeklySourceLabel, topPosts, topPostsSource, formatMixText};
+}
+
+/* ================= CHART BUILDERS ================= */
+const BAR_COLORS = ['#0E1650','#222FA6','#A9B7F5','#CFFF4D','#6B7280','#9FE619'];
+
+function buildBarChart(weekly){
+  if(!weekly.length) return '<div class="empty-note">Weekly trend needs either a Meta CSV/Excel upload with dates, or the Week 1–5 views fields filled in.</div>';
+  const w=620, baseline=160, top=30, h=196;
+  const maxV = Math.max(...weekly.map(d=>d.views),1);
+  const n = weekly.length;
+  const slot = w/n;
+  const barW = Math.min(90, slot*0.5);
+  let bars='';
+  weekly.forEach((d,i)=>{
+    const bh = Math.max(2,(d.views/maxV)*(baseline-top));
+    const x = i*slot + (slot-barW)/2;
+    const y = baseline-bh;
+    const color = BAR_COLORS[i%BAR_COLORS.length];
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="4" fill="${color}"/>`;
+    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${Math.max(14,y-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#0E1650">${d.views.toLocaleString()}</text>`;
+    bars += `<text x="${(x+barW/2).toFixed(1)}" y="180" text-anchor="middle" font-size="11" font-weight="700" fill="#14162B">${d.label}</text>`;
+    bars += d.posts ? `<text x="${(x+barW/2).toFixed(1)}" y="195" text-anchor="middle" font-size="9.5" fill="#6B7280">${d.posts} post${d.posts===1?'':'s'}</text>` : '';
+  });
+  return `<svg viewBox="0 0 ${w} ${h}"><line x1="0" y1="${baseline}" x2="${w}" y2="${baseline}" stroke="#E4E7EC" stroke-width="1"/>${bars}</svg>`;
+}
+
+function buildDial(pct){
+  const r=58, C=2*Math.PI*r;
+  const exceeded = pct!==null && pct>100;
+  const clamped = pct===null ? 0 : Math.max(0,Math.min(100,pct));
+  const offset = C*(1-clamped/100);
+  const arcColor = pct===null ? '#E9ECF1' : (exceeded ? '#3FA34D' : '#CFFF4D');
+  const displayPct = pct===null ? '' : (exceeded ? '100%+' : pct+'%');
+  const label = exceeded ? 'GOAL MET' : 'COMPLETE';
+  return `<svg viewBox="0 0 140 140" width="112" height="112">
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="#E9ECF1" stroke-width="13"/>
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="${arcColor}" stroke-width="13" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}" stroke-linecap="round" transform="rotate(-90 70 70)"/>
+    <text x="70" y="66" text-anchor="middle" class="dial-num">${displayPct}</text>
+    <text x="70" y="83" text-anchor="middle" class="dial-label">${pct===null?'':label}</text>
+  </svg>`;
+}
+
+/* ================= REPORT RENDER ================= */
+function generateReport(){
+  const agg = computeAggregates();
+  const s = agg.sums;
+
+  const client = txt('d_client');
+  if(!client){
+    alert('Add a Client Name in Step 3 before generating the report.');
+    goToStep(3);
+    document.getElementById('d_client').focus();
+    return;
+  }
+  const hasAnyData = s.views||s.likes||s.comments||s.shares||s.posts||agg.topPosts.length;
+  if(!hasAnyData){
+    if(!confirm('No performance data has been entered yet — the report will be mostly blank. Generate it anyway?')) return;
+  }
+
+  const prevViews = numOrNull('d_prevviews');
+  let trendHTML = '';
+  if(prevViews!==null && prevViews>0 && s.views>0){
+    const delta = ((s.views-prevViews)/prevViews*100);
+    const up = delta>=0;
+    trendHTML = `<span class="${up?'trend-up':'trend-down'}">${up?'▲':'▼'} ${Math.abs(delta).toFixed(0)}%</span> vs last month`;
+  }
+
+  const goalTarget = numOrNull('d_goaltarget');
+  const goalCurrent = numOrNull('d_goalcurrent');
+  const goalMetric = txt('d_goalmetric') || 'Views';
+  const goalPct = (goalTarget && goalCurrent!==null && goalTarget>0) ? Math.round(goalCurrent/goalTarget*100) : null;
+  const audience = numOrNull('d_audience');
+
+  const period = txt('d_period');
+
+  const adsStatus = document.getElementById('d_adsstatus').value;
+  const funnelStatus = document.getElementById('d_funnelstatus').value;
+  const lpStatus = document.getElementById('d_lpstatus').value;
+  const adsNote = txt('d_adsnote');
+  const funnelNote = txt('d_funnelnote');
+  const lpNote = txt('d_lpnote');
+  const otherWin = txt('d_otherwin');
+  const priorities = [txt('d_p1'), txt('d_p2'), txt('d_p3')].filter(Boolean);
+
+  function implRow(labelText, status, note){
+    if(!status && !note) return '';
+    const isYes = status==='yes';
+    const icon = isYes
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="#1F8A4C" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="#8A8A93" stroke-width="3" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+    return `<li><span class="impl-badge ${isYes?'yes':'no'}">${icon}</span><span><span class="impl-label">${esc(labelText)}:</span> ${esc(note)||''}</span></li>`;
+  }
+  let implHTML = implRow('Ads Updates', adsStatus, adsNote) + implRow('Funnel Setup', funnelStatus, funnelNote) + implRow('LP Setup', lpStatus, lpNote);
+  if(otherWin) implHTML += `<li><span class="impl-badge yes"><svg viewBox="0 0 24 24" fill="none" stroke="#1F8A4C" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg></span><span><span class="impl-label">Other win:</span> ${esc(otherWin)}</span></li>`;
+  if(!implHTML) implHTML = '<li style="color:#9AA0AC;">Nothing entered yet.</li>';
+
+  let priHTML = priorities.map((p,i)=>`<li><span class="step">0${i+1}</span>${esc(p)}</li>`).join('');
+  if(!priHTML) priHTML = '<li style="color:#8FA0D6;">Nothing entered yet.</li>';
+
+  let topHTML = '';
+  if(agg.topPosts.length){
+    topHTML = agg.topPosts.map((p,i)=>`
+      <tr>
+        <td><span class="rank">${i+1}</span></td>
+        <td>"${esc(p.title)}"${(p.channel||p.date)? '<br><span class="meta">'+esc([p.channel, p.posttype, p.date? new Date(p.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):null].filter(Boolean).join(' · '))+'</span>':''}</td>
+        <td class="num">${fmt(p.views)}</td>
+        <td class="num">${fmt(p.likes)}</td>
+      </tr>`).join('');
+  } else {
+    topHTML = '<tr><td colspan="4" style="color:#9AA0AC;">Nothing entered yet.</td></tr>';
+  }
+
+  const html = `
+  <div class="sheet"><div class="sheet-inner">
+    <div class="masthead">
+      <div>
+        <div class="mh-title">${esc(client)||'—'}</div>
+        <div class="mh-sub">Monthly Content Performance Report${period?' · '+esc(period):''}</div>
+      </div>
+      <div class="mh-tag">ACCELERATE</div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Total Views
+          <span class="tip">i<span class="tip-bubble">Sum of every active channel's Total Views field (Step 2). "Reach" next to it is TikTok-only — Meta, LinkedIn and YouTube don't track reach here, so it's never a full cross-platform reach figure.</span></span>
+        </div>
+        <div class="stat-value">${fmt(s.views)}</div>
+        <div class="stat-note">${trendHTML}${(trendHTML && s.reach)?' &middot; ':''}${s.reach?('Reach '+fmt(s.reach)):''}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">New Followers
+          <span class="tip">i<span class="tip-bubble">Added up per channel as (current followers − last month's followers). If a channel's follower fields were left blank, it contributes 0 here even if it has views/posts.</span></span>
+        </div>
+        <div class="stat-value">${fmt(s.follows)}</div>
+        <div class="stat-note g">${s.follows?'Across connected channels':''}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Posts Published</div>
+        <div class="stat-value">${fmt(s.posts)}</div>
+        <div class="stat-note">${agg.formatMixText}</div>
+      </div>
+    </div>
+
+    <div class="graphs-card">
+      <div class="row-3">
+        <div class="col-goal">
+          <div class="col-title">90-Day Goal <span>· ${esc(goalMetric)} · manual</span></div>
+          <div class="dial-wrap">
+            ${buildDial(goalPct)}
+            <div class="dial-caption">
+              <div class="big">${goalCurrent!==null||goalTarget!==null ? (fmt(goalCurrent)+' → '+fmt(goalTarget)) : ''}</div>
+              <div class="small">CURRENT — 90-DAY ${esc(goalMetric.toUpperCase())} TARGET</div>
+            </div>
+            <div class="audience-chip">
+              <div class="n">${fmt(audience)}</div>
+              <div class="l">Current Follower Audience</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-chart">
+          <div class="col-title">Views by Week <span>· ${esc(agg.weeklySourceLabel || 'no data')}</span>
+            <span class="tip">i<span class="tip-bubble">"Auto" means these come from an uploaded file with real post dates. "Manual" means a PO typed weekly totals in by hand (No Meta Access mode). "Auto + manual" means this report mixes both across different channels.</span></span>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-legend">
+              <span class="meta">${(()=>{ const active=agg.weekly.filter(w=>w.views>0||w.posts>0).length; return active? active+' posting week'+(active===1?'':'s') : ''; })()}</span>
+              <span class="chart-insight"></span>
+            </div>
+            ${buildBarChart(agg.weekly)}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div class="card" style="border-top:3px solid var(--navy-2);">
+        <div class="card-head"><div class="card-title">Top Performing Content <span>· ${esc(agg.topPostsSource || 'no data')}</span>
+          <span class="tip">i<span class="tip-bubble">"Auto" means these posts came from an uploaded file with real dates and view counts. "Manual" means a PO typed these in by hand in Step 3 (no dated data was available for any channel).</span></span>
+        </div></div>
+        <table>
+          <thead><tr><th></th><th>Post</th><th style="text-align:right">Views</th><th style="text-align:right">Likes</th></tr></thead>
+          <tbody>${topHTML}</tbody>
+        </table>
+      </div>
+
+      <div class="card" style="background:#F2F3F5; border-color:#E4E7EC;">
+        <div class="card-head"><div class="card-title">Implementations &amp; Wins <span>· manual</span></div></div>
+        <ul class="impl-list">${implHTML}</ul>
+      </div>
+
+      <div class="card priorities">
+        <div class="card-head"><div class="card-title">Next-Month Priorities <span style="color:#8FA8F5">· manual</span></div></div>
+        <ul>${priHTML}</ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Prepared for ${esc(client)||'—'}</span>
+      <span>Confidential${period?' · '+esc(period):''}</span>
+    </div>
+  </div></div>`;
+
+  document.getElementById('reportRoot').innerHTML = html;
+  fitReportToPage();
+  saveDraft();
+  goToStep(4);
+}
+
+/* ================= FIT-TO-ONE-PAGE ==================
+   The report is a fixed-size A4-landscape sheet (297mm x 210mm) so it always prints as
+   exactly one page. Content amount varies client-to-client (long post titles wrapping to
+   two lines, longer priority notes, etc.), so instead of guessing at trims, we measure the
+   actual rendered height and scale the whole thing down just enough to fit — same idea as
+   "shrink to fit" in a PDF export. Runs after every report generation, on window resize,
+   and again right before printing (fonts can render at very slightly different metrics
+   between screen and print, so we re-measure right before the browser paints the page). */
+function fitReportToPage(){
+  const sheet = document.querySelector('.sheet');
+  const inner = document.querySelector('.sheet-inner');
+  if(!sheet || !inner) return;
+  inner.style.transform = 'none';
+  inner.style.width = '100%';
+  const targetHeight = sheet.clientHeight;   // 210mm rendered in px
+  const naturalHeight = inner.scrollHeight;  // unscaled content height in px
+  if(targetHeight && naturalHeight > targetHeight){
+    const scale = targetHeight / naturalHeight;
+    inner.style.transform = 'scale(' + scale + ')';
+    inner.style.width = (100/scale) + '%'; // widen before shrinking so the scaled result still fills the sheet's width
+  }
+}
+window.addEventListener('resize', ()=>{ if(document.querySelector('.sheet-inner')) fitReportToPage(); });
+window.addEventListener('beforeprint', fitReportToPage);
+
+/* ================= ISOLATED PRINT (guarantees exactly one page) =================
+   Printing straight from this page means Chrome has to compute page breaks for the WHOLE
+   document — the step nav, buttons, everything — even the parts we hide with CSS. Any of
+   that leftover layout height can tip the total past one page and spill a blank 2nd page.
+   Instead, we build a brand-new, throwaway document containing ONLY the report sheet
+   (nothing else exists in it to contribute extra height) and print that in a hidden iframe.
+   This is the standard "print only this element" technique and sidesteps the whole class
+   of leftover-layout bugs entirely, rather than trying to hide every other element by hand. */
+function printReport(){
+  const sheet = document.querySelector('.sheet');
+  if(!sheet){ alert('Generate the report first.'); return; }
+  fitReportToPage();
+  const styleTag = document.querySelector('style') ? document.querySelector('style').outerHTML : '';
+  const printDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report</title>
+    ${styleTag}
+    <style>
+      html,body{ margin:0; padding:0; background:#fff; }
+      .sheet{ margin:0 !important; box-shadow:none !important; width:297mm; height:210mm; overflow:hidden; }
+      .sheet .tip{ display:none !important; }
+      @page{ size:A4 landscape; margin:0; }
+    </style>
+  </head><body>${sheet.outerHTML}</body></html>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0; visibility:hidden;';
+
+  let printed = false;
+  function doPrint(){
+    if(printed) return;
+    printed = true;
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(e){
+      alert('The print dialog could not be opened automatically. Try pressing Ctrl+P (Windows) or Cmd+P (Mac) instead — the page is still set up to print correctly on its own.');
+    }
+  }
+  // srcdoc (set below, after the load listener is attached) fires 'load' reliably once the
+  // iframe's document has actually parsed — unlike document.write(), whose load event can
+  // fire (or not) before a handler attached afterward ever gets a chance to run, silently
+  // dropping the print() call with no error and nothing visibly happening. A fixed-delay
+  // fallback also fires regardless, in case 'load' still doesn't fire in some browser.
+  iframe.onload = function(){ setTimeout(doPrint, 50); };
+  setTimeout(doPrint, 1000);
+
+  document.body.appendChild(iframe);
+  iframe.srcdoc = printDoc;
+
+  function cleanup(){ if(iframe.parentNode) iframe.parentNode.removeChild(iframe); }
+  setTimeout(cleanup, 6000);
+}
+
+/* ================= DRAFT AUTOSAVE (localStorage) ================= */
+const FIELD_IDS = ['d_client','d_period','d_prevviews','d_goaltarget','d_goalcurrent','d_goalmetric','d_audience',
+  'd_adsstatus','d_adsnote','d_funnelstatus','d_funnelnote','d_lpstatus','d_lpnote','d_otherwin',
+  'd_p1','d_p2','d_p3','tp1_title','tp1_views','tp1_likes','tp2_title','tp2_views','tp2_likes',
+  'tp3_title','tp3_views','tp3_likes','mm_views','mm_posts','mm_follows','mm_wk1','mm_wk2','mm_wk3','mm_wk4','mm_wk5','im_follows',
+  'tt_views','tt_posts','tt_likes','tt_comments','tt_shares','tt_saves','tt_reach','tt_foll_now','tt_foll_prev',
+  'li_posts','li_likes','li_comments','li_shares','li_foll_now','li_foll_prev',
+  'yt_views','yt_posts','yt_likes','yt_comments','yt_shares','yt_sub_now','yt_sub_prev','reportMonthFilter'];
+
+function serializeRows(rows){ return (rows||[]).map(r=>({...r, date: r.date? r.date.toISOString(): null})); }
+function deserializeRows(rows){ return (rows||[]).map(r=>({...r, date: r.date? new Date(r.date): null})); }
+
+function saveDraft(){
+  try{
+    const data = {
+      channels: STATE.channels,
+      noMeta: STATE.noMeta,
+      metaClientKeys: STATE.metaClientKeys,
+      metaRowsAll: serializeRows(STATE.metaRowsAll),
+      extraRows: {
+        tiktok: serializeRows(STATE.extraRows.tiktok),
+        linkedin: serializeRows(STATE.extraRows.linkedin),
+        youtube: serializeRows(STATE.extraRows.youtube),
+      },
+      fields: {}
+    };
+    FIELD_IDS.forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) data.fields[id] = el.value;
+    });
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+    const ind = document.getElementById('draftStatus');
+    if(ind) ind.textContent = 'Draft saved ' + new Date().toLocaleTimeString();
+  }catch(e){ /* localStorage unavailable — fail silently, nothing else depends on it */ }
+}
+
+function loadDraft(){
+  let raw;
+  try{ raw = localStorage.getItem(DRAFT_KEY); }catch(e){ return; }
+  if(!raw) return;
+  try{
+    const data = JSON.parse(raw);
+    STATE.channels = Object.assign(STATE.channels, data.channels||{});
+    STATE.noMeta = !!data.noMeta;
+    STATE.metaClientKeys = data.metaClientKeys || null;
+    STATE.metaRowsAll = deserializeRows(data.metaRowsAll);
+    STATE.extraRows.tiktok = deserializeRows(data.extraRows && data.extraRows.tiktok);
+    STATE.extraRows.linkedin = deserializeRows(data.extraRows && data.extraRows.linkedin);
+    STATE.extraRows.youtube = deserializeRows(data.extraRows && data.extraRows.youtube);
+
+    document.querySelectorAll('.chip input').forEach(cb=>{
+      cb.checked = !!STATE.channels[cb.dataset.ch];
+      cb.closest('.chip').classList.toggle('checked', cb.checked);
+    });
+    document.getElementById('noMetaAccess').checked = STATE.noMeta;
+
+    Object.keys(data.fields||{}).forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.value = data.fields[id];
+    });
+
+    const ind = document.getElementById('draftStatus');
+    if(ind) ind.textContent = 'Restored draft from ' + new Date().toLocaleTimeString();
+  }catch(e){ /* corrupted draft — ignore and start fresh */ }
+}
+
+function clearDraft(){
+  try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+  location.reload();
+}
+
+let saveDraftTimer = null;
+function scheduleSave(){ clearTimeout(saveDraftTimer); saveDraftTimer = setTimeout(saveDraft, 600); }
+
+/* If this is being viewed inside an iframe (e.g. Slack's built-in file preview instead of
+   a real browser tab), core things like the print button and localStorage-based autosave
+   can behave unpredictably or fail outright with no visible error. Block with clear
+   instructions instead of leaving people clicking a button that silently does nothing. */
+if(window.self !== window.top){
+  document.getElementById('iframeBlock').style.display = 'flex';
+}
+
+/* init */
+loadDraft();
+refreshStep2Blocks();
+recalcMetaManualViews();
+['tiktok','linkedin','youtube'].forEach(key=>{
+  if(STATE.extraRows[key] && STATE.extraRows[key].length){
+    const map = AUTO_FIELD_MAP[key];
+    Object.keys(map).forEach(field=>{
+      const id = map[field];
+      const input = document.getElementById(id);
+      const wrap = document.getElementById(id+'_wrap');
+      input.readOnly = true; input.tabIndex = -1;
+      if(wrap) wrap.classList.add('is-auto');
+    });
+  }
+});
+document.getElementById('app').addEventListener('input', scheduleSave);
+document.getElementById('app').addEventListener('change', scheduleSave);
+</script>
+</body>
+</html>
