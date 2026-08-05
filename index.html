@@ -184,6 +184,7 @@
     .sheet, .sheet *{ visibility:visible; }
     .sheet{ position:absolute; top:0; left:0; margin:0; box-shadow:none; width:297mm; height:210mm; }
     .sheet .tip{ display:none; } /* tooltips are for the PO reviewing on-screen, not the client-facing PDF */
+    .sheet .no-print{ display:none !important; } /* on-screen-only controls like the chart view toggle */
   }
 
   .masthead{
@@ -221,6 +222,10 @@
 
   .chart-wrap{ width:100%; }
   .chart-legend{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1.5mm; }
+  .chart-toggle{ display:inline-flex; margin-left:10px; border:1px solid var(--border); border-radius:7px; overflow:hidden; vertical-align:middle; }
+  .chart-toggle-btn{ border:none; background:#fff; color:var(--muted); font-size:10.5px; font-weight:700; padding:3px 10px; cursor:pointer; font-family:inherit; }
+  .chart-toggle-btn.active{ background:var(--navy); color:#fff; }
+  .chart-toggle-btn:not(.active):hover{ background:#F0F1F4; }
   .chart-insight{ font-size:10.5px; color:var(--green); font-weight:700; }
   .chart-wrap svg{ width:100%; height:auto; display:block; }
   .empty-note{ font-size:10.5px; color:var(--muted); font-style:italic; padding:18mm 2mm; text-align:center; }
@@ -1275,11 +1280,51 @@ function buildGroupedBarChart(weekly, channelOrder, colorMap){
   return `<svg viewBox="0 0 ${w} ${h}"><line x1="0" y1="${baseline}" x2="${w}" y2="${baseline}" stroke="#E4E7EC" stroke-width="1"/>${bars}</svg>`;
 }
 
+// Single combined bar per week (sum across all channels) — the simpler default view.
+function buildCombinedBarChart(weekly){
+  if(!weekly.length) return '<div class="empty-note">Weekly trend needs either a Meta CSV/Excel upload with dates, or the Week 1–5 views fields filled in.</div>';
+  const w=620, baseline=160, top=30, h=196;
+  const maxV = Math.max(...weekly.map(d=>d.totalViews),1);
+  const n = weekly.length;
+  const slot = w/n;
+  const barW = Math.min(90, slot*0.5);
+  let bars='';
+  weekly.forEach((d,i)=>{
+    const bh = Math.max(2,(d.totalViews/maxV)*(baseline-top));
+    const x = i*slot + (slot-barW)/2;
+    const y = baseline-bh;
+    const color = BAR_COLORS[i%BAR_COLORS.length];
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="4" fill="${color}"/>`;
+    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${Math.max(14,y-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#0E1650">${d.totalViews.toLocaleString()}</text>`;
+    bars += `<text x="${(x+barW/2).toFixed(1)}" y="180" text-anchor="middle" font-size="11" font-weight="700" fill="#14162B">${d.label}</text>`;
+    bars += d.totalPosts ? `<text x="${(x+barW/2).toFixed(1)}" y="195" text-anchor="middle" font-size="9.5" fill="#6B7280">${d.totalPosts} post${d.totalPosts===1?'':'s'}</text>` : '';
+  });
+  return `<svg viewBox="0 0 ${w} ${h}"><line x1="0" y1="${baseline}" x2="${w}" y2="${baseline}" stroke="#E4E7EC" stroke-width="1"/>${bars}</svg>`;
+}
+
 function buildChannelLegend(channelOrder, colorMap){
   if(channelOrder.length<=1) return '';
   return '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px;">' +
     channelOrder.map(ch=>`<span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:var(--text);"><span style="width:9px;height:9px;border-radius:50%;background:${colorMap[ch]};display:inline-block;"></span>${esc(ch)}</span>`).join('') +
     '</div>';
+}
+
+// Swaps the on-screen chart between one combined bar per week and platform-split grouped
+// bars — purely a preview toggle (no-print), since a printed PDF is a static snapshot and
+// can't itself hold an interactive control. Whichever mode is showing when Print is clicked
+// is what ends up in the exported PDF.
+function setChartMode(mode){
+  const agg = computeAggregates();
+  const colorMap = buildColorMap(agg.channelOrder);
+  const target = document.getElementById('chartRenderArea');
+  if(!target) return;
+  if(mode==='platform'){
+    const chans = agg.channelOrder.filter(ch=>agg.weekly.some(w=>w.channels[ch]));
+    target.innerHTML = buildGroupedBarChart(agg.weekly, agg.channelOrder, colorMap) + buildChannelLegend(chans, colorMap);
+  } else {
+    target.innerHTML = buildCombinedBarChart(agg.weekly);
+  }
+  document.querySelectorAll('.chart-toggle-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
 }
 
 // Compact side-by-side comparison of each channel's overall total — this is what covers
@@ -1443,17 +1488,22 @@ function generateReport(){
         <div class="col-chart">
           <div class="col-title">Views by Week <span>· ${esc(agg.weeklySourceLabel || 'no data')}</span>
             <span class="tip">i<span class="tip-bubble">"Auto" means these come from an uploaded file with real post dates. "Manual" means a PO typed weekly totals in by hand (No Meta Access mode). "Auto + manual" means this report mixes both across different channels.</span></span>
+            ${agg.channelOrder.filter(ch=>agg.weekly.some(w=>w.channels[ch])).length>1 ? `
+            <span class="no-print chart-toggle">
+              <button type="button" class="chart-toggle-btn active" data-mode="combined" onclick="setChartMode('combined')">Combined</button
+              ><button type="button" class="chart-toggle-btn" data-mode="platform" onclick="setChartMode('platform')">By Platform</button>
+            </span>` : ''}
           </div>
           <div class="chart-wrap">
             <div class="chart-legend">
               <span class="meta">${(()=>{ const active=agg.weekly.filter(w=>w.totalViews>0||w.totalPosts>0).length; return active? active+' posting week'+(active===1?'':'s') : ''; })()}</span>
               <span class="chart-insight"></span>
             </div>
-            ${buildGroupedBarChart(agg.weekly, agg.channelOrder, channelColorMap)}
-            ${buildChannelLegend(agg.channelOrder.filter(ch=>agg.weekly.some(w=>w.channels[ch])), channelColorMap)}
+            <div id="chartRenderArea">${buildCombinedBarChart(agg.weekly)}</div>
           </div>
         </div>
       </div>
+      <div class="no-print" id="chartModeHint" style="font-size:10.5px; color:var(--muted); margin-top:6px;">The toggle above only affects this on-screen preview — whichever view is showing when you print/export becomes part of the PDF.</div>
       ${buildChannelTotalsRow(agg.channelTotals, agg.channelOrder, channelColorMap)}
     </div>
 
@@ -1535,6 +1585,7 @@ function printReport(){
       html,body{ margin:0; padding:0; background:#fff; }
       .sheet{ margin:0 !important; box-shadow:none !important; width:297mm; height:210mm; overflow:hidden; }
       .sheet .tip{ display:none !important; }
+      .sheet .no-print{ display:none !important; }
       @page{ size:A4 landscape; margin:0; }
     </style>
   </head><body>${sheet.outerHTML}</body></html>`;
