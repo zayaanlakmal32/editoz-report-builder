@@ -92,6 +92,7 @@
   .field-group textarea{ resize:vertical; min-height:52px; }
   .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .field-row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+  .field-row4{ display:grid; grid-template-columns:1.5fr 1.5fr 0.9fr 0.9fr; gap:14px; }
 
   .source-block{ border:1px dashed var(--border); border-radius:12px; padding:18px 20px; margin-bottom:16px; display:none; }
   .source-block.show{ display:block; }
@@ -550,10 +551,12 @@
     </div>
 
     <div class="field-group" id="manualTopPostsWrap" style="display:none;">
-      <label>Top Performing Content <span class="sub">(no per-post file was uploaded — enter up to 3 manually)</span></label>
-      <div class="field-row3" style="margin-bottom:6px;"><input type="text" id="tp1_title" placeholder="Post title"><input type="number" id="tp1_views" placeholder="Views"><input type="number" id="tp1_likes" placeholder="Likes"></div>
-      <div class="field-row3" style="margin-bottom:6px;"><input type="text" id="tp2_title" placeholder="Post title"><input type="number" id="tp2_views" placeholder="Views"><input type="number" id="tp2_likes" placeholder="Likes"></div>
-      <div class="field-row3"><input type="text" id="tp3_title" placeholder="Post title"><input type="number" id="tp3_views" placeholder="Views"><input type="number" id="tp3_likes" placeholder="Likes"></div>
+      <label>Top Performing Content <span class="sub">(no per-post file was uploaded — enter up to 3 manually)</span>
+        <span class="tip">i<span class="tip-bubble">Post URL is optional — if filled in, the post title becomes a clickable link on the client's report so they can jump straight to it. Leave blank and it just shows as plain text.</span></span>
+      </label>
+      <div class="field-row4" style="margin-bottom:6px;"><input type="text" id="tp1_title" placeholder="Post title"><input type="text" id="tp1_url" placeholder="Post URL (optional)"><input type="number" id="tp1_views" placeholder="Views"><input type="number" id="tp1_likes" placeholder="Likes"></div>
+      <div class="field-row4" style="margin-bottom:6px;"><input type="text" id="tp2_title" placeholder="Post title"><input type="text" id="tp2_url" placeholder="Post URL (optional)"><input type="number" id="tp2_views" placeholder="Views"><input type="number" id="tp2_likes" placeholder="Likes"></div>
+      <div class="field-row4"><input type="text" id="tp3_title" placeholder="Post title"><input type="text" id="tp3_url" placeholder="Post URL (optional)"><input type="number" id="tp3_views" placeholder="Views"><input type="number" id="tp3_likes" placeholder="Likes"></div>
     </div>
     <div class="field-group" id="autoTopPostsNote" style="display:none;">
       <label>Top Performing Content <span class="sub">· auto</span></label>
@@ -697,6 +700,7 @@ function applyAutoTotals(key, rows){
 // report spec, not parsed from per-post CSV/Excel uploads — so there's no 'reach' key here.
 const HEADER_MAP = {
   'post id':'postid',
+  'permalink':'url','post link':'url','link':'url',
   'account username':'client','account name':'client','platform':'client',
   'description':'title','post title':'title','post':'title',
   'post type':'posttype','type':'posttype',
@@ -719,7 +723,7 @@ function parseNum(v){
 }
 
 function normalizeRow(raw){
-  const out = {client:'', title:'', posttype:'', date:null, views:0, likes:0, comments:0, shares:0, saves:0, follows:0, postid:''};
+  const out = {client:'', title:'', posttype:'', date:null, views:0, likes:0, comments:0, shares:0, saves:0, follows:0, postid:'', url:''};
   Object.keys(raw).forEach(k=>{
     const key = HEADER_MAP[k.trim().toLowerCase()];
     if(!key) return;
@@ -1157,13 +1161,13 @@ function computeAggregates(){
   let topPosts = [];
   let topPostsSource = '';
   if(datedPosts.length){
-    topPosts = [...datedPosts].sort((a,b)=>b.views-a.views).slice(0,3).map(p=>({title:p.title||'(untitled post)', views:p.views, likes:p.likes, posttype:p.posttype, date:p.date, channel:p.channel}));
+    topPosts = [...datedPosts].sort((a,b)=>b.views-a.views).slice(0,3).map(p=>({title:p.title||'(untitled post)', views:p.views, likes:p.likes, posttype:p.posttype, date:p.date, channel:p.channel, url:p.url||''}));
     topPostsSource = 'auto';
   } else {
-    [['tp1_title','tp1_views','tp1_likes'],['tp2_title','tp2_views','tp2_likes'],['tp3_title','tp3_views','tp3_likes']].forEach(([t,v,l])=>{
+    [['tp1_title','tp1_views','tp1_likes','tp1_url'],['tp2_title','tp2_views','tp2_likes','tp2_url'],['tp3_title','tp3_views','tp3_likes','tp3_url']].forEach(([t,v,l,u])=>{
       const title = txt(t);
       if(title){
-        topPosts.push({title, views:Number(document.getElementById(v).value)||0, likes:Number(document.getElementById(l).value)||0});
+        topPosts.push({title, views:Number(document.getElementById(v).value)||0, likes:Number(document.getElementById(l).value)||0, url:txt(u)});
       }
     });
     if(topPosts.length) topPostsSource = 'manual';
@@ -1286,13 +1290,18 @@ function generateReport(){
 
   let topHTML = '';
   if(agg.topPosts.length){
-    topHTML = agg.topPosts.map((p,i)=>`
+    topHTML = agg.topPosts.map((p,i)=>{
+      const safeUrl = /^https?:\/\//i.test(p.url||'') ? p.url : null;
+      const titleHtml = safeUrl
+        ? `<a href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer" style="color:inherit; text-decoration:underline;">"${esc(p.title)}"</a>`
+        : `"${esc(p.title)}"`;
+      return `
       <tr>
         <td><span class="rank">${i+1}</span></td>
-        <td>"${esc(p.title)}"${(p.channel||p.date)? '<br><span class="meta">'+esc([p.channel, p.posttype, p.date? new Date(p.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):null].filter(Boolean).join(' · '))+'</span>':''}</td>
+        <td>${titleHtml}${(p.channel||p.date)? '<br><span class="meta">'+esc([p.channel, p.posttype, p.date? new Date(p.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):null].filter(Boolean).join(' · '))+'</span>':''}</td>
         <td class="num">${fmt(p.views)}</td>
         <td class="num">${fmt(p.likes)}</td>
-      </tr>`).join('');
+      </tr>`;}).join('');
   } else {
     topHTML = '<tr><td colspan="4" style="color:#9AA0AC;">Nothing entered yet.</td></tr>';
   }
@@ -1475,8 +1484,8 @@ function printReport(){
 /* ================= DRAFT AUTOSAVE (localStorage) ================= */
 const FIELD_IDS = ['d_client','d_period','d_prevviews','d_goaltarget','d_goalcurrent','d_goalmetric','d_audience',
   'd_adsstatus','d_adsnote','d_funnelstatus','d_funnelnote','d_lpstatus','d_lpnote','d_otherwin',
-  'd_p1','d_p2','d_p3','tp1_title','tp1_views','tp1_likes','tp2_title','tp2_views','tp2_likes',
-  'tp3_title','tp3_views','tp3_likes','mm_views','mm_posts','mm_follows','mm_wk1','mm_wk2','mm_wk3','mm_wk4','mm_wk5','im_follows',
+  'd_p1','d_p2','d_p3','tp1_title','tp1_views','tp1_likes','tp1_url','tp2_title','tp2_views','tp2_likes','tp2_url',
+  'tp3_title','tp3_views','tp3_likes','tp3_url','mm_views','mm_posts','mm_follows','mm_wk1','mm_wk2','mm_wk3','mm_wk4','mm_wk5','im_follows',
   'tt_views','tt_posts','tt_likes','tt_comments','tt_shares','tt_saves','tt_reach','tt_foll_now','tt_foll_prev',
   'li_posts','li_likes','li_comments','li_shares','li_foll_now','li_foll_prev',
   'yt_views','yt_posts','yt_likes','yt_comments','yt_shares','yt_sub_now','yt_sub_prev','reportMonthFilter'];
