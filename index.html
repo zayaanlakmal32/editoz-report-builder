@@ -1255,25 +1255,25 @@ function buildGroupedBarChart(weekly, channelOrder, colorMap){
   const n = weekly.length;
   const slot = w/n;
   const chCount = Math.max(1, activeChans.length);
-  const groupW = Math.min(slot*0.8, 34*chCount+ (chCount-1)*4);
-  const barW = Math.max(7, (groupW-(chCount-1)*4)/chCount);
+  const groupW = Math.min(slot*0.8, 40*chCount+ (chCount-1)*5);
+  const barW = Math.max(9, (groupW-(chCount-1)*5)/chCount);
   let bars='';
   weekly.forEach((wk,i)=>{
     const groupX = i*slot + (slot-groupW)/2;
-    let maxBarH = 0;
     activeChans.forEach((ch,ci)=>{
       const data = wk.channels[ch];
       const views = data ? data.views : 0;
+      const x = groupX + ci*(barW+5);
+      const cx2 = x+barW/2;
       if(views<=0) return;
       const bh = Math.max(3,(views/maxV)*(baseline-top));
-      maxBarH = Math.max(maxBarH, bh);
-      const x = groupX + ci*(barW+4);
       const y = baseline-bh;
       bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${colorMap[ch]}"/>`;
+      // Each bar gets its own value label — this IS the comparison, so the individual
+      // number matters more here than a single blended total for the whole week.
+      bars += `<text x="${cx2.toFixed(1)}" y="${Math.max(11,y-6).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="800" fill="#0E1650">${views.toLocaleString()}</text>`;
     });
     const cx = i*slot+slot/2;
-    const labelY = Math.max(14, baseline-maxBarH-10);
-    if(wk.totalViews>0) bars += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#0E1650">${wk.totalViews.toLocaleString()}</text>`;
     bars += `<text x="${cx.toFixed(1)}" y="180" text-anchor="middle" font-size="11" font-weight="700" fill="#14162B">${wk.label}</text>`;
     bars += wk.totalPosts ? `<text x="${cx.toFixed(1)}" y="195" text-anchor="middle" font-size="9.5" fill="#6B7280">${wk.totalPosts} post${wk.totalPosts===1?'':'s'}</text>` : '';
   });
