@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       });
       if (!response.ok) {
         const detail = await response.text();
-        return res.status(response.status).json({ error: 'Notion API error', detail });
+        return res.status(response.status).json({ error: 'Notion API error', detail, _debug_endpoint_called: `https://api.notion.com/v1/data_sources/${DATA_SOURCE_ID}/query`, _debug_code_version: 'v2-data-sources-fix' });
       }
       const data = await response.json();
       names.push(...data.results.map(p => p.properties['Client Name']?.title?.[0]?.plain_text).filter(Boolean));
