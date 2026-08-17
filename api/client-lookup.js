@@ -1,23 +1,29 @@
 // api/client-lookup.js
 // Looks up one client by exact name in the Project Tracker and returns just the fields
 // the report tool needs. Read-only — never writes back to Notion.
+//
+// Uses Notion API version 2025-09-03+ (the "data sources" model). Notion split what used
+// to be one "database" object into a container (database) + one or more data sources as
+// of Sept 2025 — query/filter calls now target a data_source_id via /v1/data_sources/,
+// not the old /v1/databases/ endpoint, which returns a misleading "could not find
+// database" 404 if you pass it a data source ID (which is what our stored ID actually is).
 export default async function handler(req, res) {
   const { name } = req.query;
   if (!name) return res.status(400).json({ error: 'Missing "name" query param' });
 
   const NOTION_TOKEN = process.env.NOTION_TOKEN;
-  const DATABASE_ID = process.env.NOTION_PROJECT_TRACKER_ID || 'b6b396fe-f0cf-4d7e-9845-e18c630c0ae7';
+  const DATA_SOURCE_ID = process.env.NOTION_PROJECT_TRACKER_ID || 'b6b396fe-f0cf-4d7e-9845-e18c630c0ae7';
 
   if (!NOTION_TOKEN) {
     return res.status(500).json({ error: 'NOTION_TOKEN is not configured on the server' });
   }
 
   try {
-    const response = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
+    const response = await fetch(`https://api.notion.com/v1/data_sources/${DATA_SOURCE_ID}/query`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${NOTION_TOKEN}`,
-        'Notion-Version': '2022-06-28',
+        'Notion-Version': '2025-09-03',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -55,4 +61,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Server error', detail: err.message });
   }
 }
-
