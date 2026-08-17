@@ -184,6 +184,7 @@
     .sheet, .sheet *{ visibility:visible; }
     .sheet{ position:absolute; top:0; left:0; margin:0; box-shadow:none; width:297mm; height:210mm; }
     .sheet .tip{ display:none; } /* tooltips are for the PO reviewing on-screen, not the client-facing PDF */
+    .sheet .no-print{ display:none !important; } /* on-screen-only controls like the chart view toggle */
   }
 
   .masthead{
@@ -218,12 +219,13 @@
   .dial-caption .small{ font-size:8.5px; color:var(--muted); margin-top:2px; }
   .dial-num{ font-size:23px; font-weight:800; fill:var(--navy); }
   .dial-label{ font-size:8px; font-weight:700; letter-spacing:0.05em; fill:var(--muted); }
-  .audience-chip{ margin-top:3mm; background:var(--blue-bg); border-radius:8px; padding:2.2mm 4mm; text-align:center; width:100%; }
-  .audience-chip .n{ font-size:14px; font-weight:800; color:var(--navy); }
-  .audience-chip .l{ font-size:8px; color:var(--muted); font-weight:700; letter-spacing:0.03em; text-transform:uppercase; }
 
   .chart-wrap{ width:100%; }
   .chart-legend{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1.5mm; }
+  .chart-toggle{ display:inline-flex; margin-left:10px; border:1px solid var(--border); border-radius:7px; overflow:hidden; vertical-align:middle; }
+  .chart-toggle-btn{ border:none; background:#fff; color:var(--muted); font-size:10.5px; font-weight:700; padding:3px 10px; cursor:pointer; font-family:inherit; }
+  .chart-toggle-btn.active{ background:var(--navy); color:#fff; }
+  .chart-toggle-btn:not(.active):hover{ background:#F0F1F4; }
   .chart-insight{ font-size:10.5px; color:var(--green); font-weight:700; }
   .chart-wrap svg{ width:100%; height:auto; display:block; }
   .empty-note{ font-size:10.5px; color:var(--muted); font-style:italic; padding:18mm 2mm; text-align:center; }
@@ -504,7 +506,12 @@
     <div class="hint">Everything here is manual by design — leave anything blank and it'll simply show blank on the final report.</div>
 
     <div class="field-row">
-      <div class="field-group"><label>Client Name</label><input type="text" id="d_client" placeholder="e.g. Dinesh Saparamadu"></div>
+      <div class="field-group">
+        <label>Client Name</label>
+        <input type="text" id="d_client" list="clientNameList" placeholder="e.g. Dinesh Saparamadu" autocomplete="off" oninput="onClientNameInput()">
+        <datalist id="clientNameList"></datalist>
+        <div id="clientNotionStatus" class="no-print" style="font-size:11px; margin-top:5px; color:var(--muted);"></div>
+      </div>
       <div class="field-group"><label>Report Period</label><input type="text" id="d_period" placeholder="e.g. June 2026"></div>
     </div>
 
@@ -517,7 +524,6 @@
       <div class="field-group"><label>90-Day Goal — Achieved</label><input type="number" id="d_goalcurrent"></div>
       <div class="field-group"><label>90-Day Goal — Metric <span class="sub">(e.g. Follower growth)</span></label><input type="text" id="d_goalmetric" placeholder="e.g. Follower growth"></div>
     </div>
-    <div class="field-group" style="max-width:340px;"><label>Current Follower Audience</label><input type="number" id="d_audience"></div>
 
     <div class="field-group"><label>Implementations &amp; Wins</label></div>
     <div class="field-row">
@@ -1047,22 +1053,45 @@ function esc(s){
 /* ================= AGGREGATION ================= */
 function computeAggregates(){
   const sums = {views:0, likes:0, comments:0, shares:0, saves:0, follows:0, posts:0, reach:0};
-  const weeklyMap = {};
+  const weeklyMap = {}; // { 'YYYY-Www': { ChannelLabel: {views, posts} } }
   const postTypeCounts = {};
+  const channelTotals = {}; // ChannelLabel -> total views, for ALL active channels (even ones with no per-week data)
+  const channelsWithWeeklyData = new Set();
 
   let datedPosts = []; // pooled across every source that has per-post dates — trend/top-content only
   let hasDatedRows = false;
 
-  function foldIntoWeeklyAndPool(rows, channelName){
+  // Meta rows are tagged per-row by whichever platform column the export used (usually
+  // literally "Instagram" or "Facebook") — but plenty of real exports (e.g. a Facebook-only
+  // Page export) don't have that column at all. The Permalink URL is a much more reliable
+  // signal when present (instagram.com vs facebook.com), so it's checked first.
+  function metaChannelLabel(row){
+    const url = (row.url||'').toLowerCase();
+    if(url.includes('instagram.com')) return 'Instagram';
+    if(url.includes('facebook.com')||url.includes('fb.com')||url.includes('fb.watch')) return 'Facebook';
+    const c = (row.client||'').trim().toLowerCase();
+    if(c==='instagram') return 'Instagram';
+    if(c==='facebook') return 'Facebook';
+    return 'Instagram/Facebook'; // no reliable signal — treated as one combined bucket
+  }
+
+  function addChannelTotal(label, views){
+    channelTotals[label] = (channelTotals[label]||0) + views;
+  }
+
+  function foldIntoWeeklyAndPool(rows, channelLabelFn){
     rows.forEach(r=>{
       if(r.posttype) postTypeCounts[r.posttype] = (postTypeCounts[r.posttype]||0)+1;
+      const chLabel = typeof channelLabelFn === 'function' ? channelLabelFn(r) : channelLabelFn;
       if(r.date){
         hasDatedRows = true;
+        channelsWithWeeklyData.add(chLabel);
         const wk = weekBucketKey(r.date);
-        if(!weeklyMap[wk]) weeklyMap[wk] = {views:0, posts:0};
-        const w = weeklyMap[wk];
-        w.views+=r.views; w.posts+=1;
-        datedPosts.push({...r, channel: r.client || channelName});
+        if(!weeklyMap[wk]) weeklyMap[wk] = {};
+        if(!weeklyMap[wk][chLabel]) weeklyMap[wk][chLabel] = {views:0, posts:0};
+        weeklyMap[wk][chLabel].views += r.views;
+        weeklyMap[wk][chLabel].posts += 1;
+        datedPosts.push({...r, channel: r.client || chLabel});
       }
     });
   }
@@ -1075,21 +1104,25 @@ function computeAggregates(){
       rows.forEach(r=>{
         sums.views+=r.views; sums.likes+=r.likes; sums.comments+=r.comments;
         sums.shares+=r.shares; sums.saves+=r.saves; sums.follows+=r.follows; sums.posts+=1;
+        addChannelTotal(metaChannelLabel(r), r.views);
       });
-      foldIntoWeeklyAndPool(rows, 'Instagram/Facebook');
+      foldIntoWeeklyAndPool(rows, r=>metaChannelLabel(r));
     }
   }
 
   // Meta manual fallback — totals always manual; weekly views are typed in directly (Week 1-5), no file needed.
   if((STATE.channels.instagram||STATE.channels.facebook) && STATE.noMeta){
-    sums.views += Number(document.getElementById('mm_views').value)||0;
+    const mmViews = Number(document.getElementById('mm_views').value)||0;
+    sums.views += mmViews;
     sums.follows += Number(document.getElementById('mm_follows').value)||0;
     sums.posts += Number(document.getElementById('mm_posts').value)||0;
+    if(mmViews) addChannelTotal('Instagram/Facebook', mmViews);
   }
 
   // TikTok — totals always manual; followers computed as current − last month
   if(STATE.channels.tiktok){
-    sums.views += Number(document.getElementById('tt_views').value)||0;
+    const ttViews = Number(document.getElementById('tt_views').value)||0;
+    sums.views += ttViews;
     sums.likes += Number(document.getElementById('tt_likes').value)||0;
     sums.comments += Number(document.getElementById('tt_comments').value)||0;
     sums.shares += Number(document.getElementById('tt_shares').value)||0;
@@ -1098,6 +1131,7 @@ function computeAggregates(){
     sums.posts += Number(document.getElementById('tt_posts').value)||0;
     const ttNow = document.getElementById('tt_foll_now').value, ttPrev = document.getElementById('tt_foll_prev').value;
     if(ttNow!=='' && ttPrev!=='') sums.follows += (Number(ttNow)-Number(ttPrev));
+    if(ttViews) addChannelTotal('TikTok', ttViews);
     foldIntoWeeklyAndPool(STATE.extraRows.tiktok, 'TikTok');
   }
 
@@ -1109,28 +1143,32 @@ function computeAggregates(){
     sums.posts += Number(document.getElementById('li_posts').value)||0;
     const liNow = document.getElementById('li_foll_now').value, liPrev = document.getElementById('li_foll_prev').value;
     if(liNow!=='' && liPrev!=='') sums.follows += (Number(liNow)-Number(liPrev));
-    foldIntoWeeklyAndPool(STATE.extraRows.linkedin, 'LinkedIn'); // views are zeroed at upload time for this channel
+    foldIntoWeeklyAndPool(STATE.extraRows.linkedin, 'LinkedIn'); // views are zeroed at upload time — excluded from the views-based channel comparison, not meaningful at 0
   }
 
   // YouTube — totals always manual; subscribers computed as current − last month
   if(STATE.channels.youtube){
-    sums.views += Number(document.getElementById('yt_views').value)||0;
+    const ytViews = Number(document.getElementById('yt_views').value)||0;
+    sums.views += ytViews;
     sums.likes += Number(document.getElementById('yt_likes').value)||0;
     sums.comments += Number(document.getElementById('yt_comments').value)||0;
     sums.shares += Number(document.getElementById('yt_shares').value)||0;
     sums.posts += Number(document.getElementById('yt_posts').value)||0;
     const ytNow = document.getElementById('yt_sub_now').value, ytPrev = document.getElementById('yt_sub_prev').value;
     if(ytNow!=='' && ytPrev!=='') sums.follows += (Number(ytNow)-Number(ytPrev));
+    if(ytViews) addChannelTotal('YouTube', ytViews);
     foldIntoWeeklyAndPool(STATE.extraRows.youtube, 'YouTube');
   }
 
-  // Weekly array — views + post count only (Engagement Rate/Trend no longer part of the report)
+  // Weekly array: union of every week that has dated data, each carrying a per-channel breakdown
   let weekly = [];
   if(hasDatedRows){
     const keys = Object.keys(weeklyMap).sort();
     weekly = keys.map((k,i)=>{
-      const w = weeklyMap[k];
-      return { label:'Week '+(i+1), views:w.views, posts:w.posts };
+      const chMap = weeklyMap[k];
+      const totalViews = Object.values(chMap).reduce((a,c)=>a+c.views,0);
+      const totalPosts = Object.values(chMap).reduce((a,c)=>a+c.posts,0);
+      return { label:'Week '+(i+1), channels:chMap, totalViews, totalPosts };
     });
   }
 
@@ -1138,17 +1176,27 @@ function computeAggregates(){
   // only weekly source for that path now, since there's no per-post file anymore.
   // Fills every slot (even blank weeks, as 0) once any week has a value, so the array stays
   // dense — a sparse array here turns Math.max(...) into NaN and breaks every bar's height.
+  // Manual mode can't be split by platform (no per-post data to tell IG from FB), so it
+  // folds in as one combined "Instagram/Facebook" bucket alongside any other auto channels.
   let hasManualWeeks = false;
   if((STATE.channels.instagram||STATE.channels.facebook) && STATE.noMeta){
     const manualWeeks = [1,2,3,4,5].map(n => Number(document.getElementById('mm_wk'+n).value)||0);
     if(manualWeeks.some(v=>v>0)){
       hasManualWeeks = true;
+      channelsWithWeeklyData.add('Instagram/Facebook');
       for(let i=0;i<5;i++){
-        if(!weekly[i]) weekly[i] = { label:'Week '+(i+1), views:0, posts:0 };
-        weekly[i].views += manualWeeks[i];
+        if(!weekly[i]) weekly[i] = { label:'Week '+(i+1), channels:{}, totalViews:0, totalPosts:0 };
+        if(!weekly[i].channels['Instagram/Facebook']) weekly[i].channels['Instagram/Facebook'] = {views:0, posts:0};
+        weekly[i].channels['Instagram/Facebook'].views += manualWeeks[i];
+        weekly[i].totalViews += manualWeeks[i];
       }
     }
   }
+
+  // Consistent channel list/order shared by the weekly comparison chart and the "Total Views
+  // by Channel" chart, so colors line up between the two and nothing appears in one but not
+  // the other unexpectedly.
+  const channelOrder = [...new Set([...channelsWithWeeklyData, ...Object.keys(channelTotals)])];
 
   // Weekly source label — the chart can be fed by dated per-post rows (auto), the No-Meta-
   // Access manual weekly fields (manual), or both at once if multiple channels are active.
@@ -1188,31 +1236,122 @@ function computeAggregates(){
     }
   }
 
-  return {sums, weekly, weeklySourceLabel, topPosts, topPostsSource, formatMixText};
+  return {sums, weekly, weeklySourceLabel, topPosts, topPostsSource, formatMixText, channelTotals, channelOrder};
 }
 
 /* ================= CHART BUILDERS ================= */
 const BAR_COLORS = ['#0E1650','#222FA6','#A9B7F5','#CFFF4D','#6B7280','#9FE619'];
 
-function buildBarChart(weekly){
+function buildColorMap(channelOrder){
+  const map = {};
+  channelOrder.forEach((ch,i)=>{ map[ch] = BAR_COLORS[i%BAR_COLORS.length]; });
+  return map;
+}
+
+// Grouped/clustered bars — each week shows one sub-bar per active channel side by side
+// (e.g. Instagram next to Facebook), so performance is directly comparable at a glance,
+// with the week's combined total shown as the bold number above the tallest bar.
+function buildGroupedBarChart(weekly, channelOrder, colorMap){
   if(!weekly.length) return '<div class="empty-note">Weekly trend needs either a Meta CSV/Excel upload with dates, or the Week 1–5 views fields filled in.</div>';
   const w=620, baseline=160, top=30, h=196;
-  const maxV = Math.max(...weekly.map(d=>d.views),1);
+  const chans = channelOrder.filter(ch=>weekly.some(wk=>wk.channels[ch]));
+  const activeChans = chans.length ? chans : channelOrder;
+  const maxV = Math.max(...weekly.flatMap(wk=>activeChans.map(ch=>(wk.channels[ch]&&wk.channels[ch].views)||0)), 1);
+  const n = weekly.length;
+  const slot = w/n;
+  const chCount = Math.max(1, activeChans.length);
+  const groupW = Math.min(slot*0.8, 40*chCount+ (chCount-1)*5);
+  const barW = Math.max(9, (groupW-(chCount-1)*5)/chCount);
+  let bars='';
+  weekly.forEach((wk,i)=>{
+    const groupX = i*slot + (slot-groupW)/2;
+    activeChans.forEach((ch,ci)=>{
+      const data = wk.channels[ch];
+      const views = data ? data.views : 0;
+      const x = groupX + ci*(barW+5);
+      const cx2 = x+barW/2;
+      if(views<=0) return;
+      const bh = Math.max(3,(views/maxV)*(baseline-top));
+      const y = baseline-bh;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${colorMap[ch]}"/>`;
+      // Each bar gets its own value label — this IS the comparison, so the individual
+      // number matters more here than a single blended total for the whole week.
+      bars += `<text x="${cx2.toFixed(1)}" y="${Math.max(11,y-6).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="800" fill="#0E1650">${views.toLocaleString()}</text>`;
+    });
+    const cx = i*slot+slot/2;
+    bars += `<text x="${cx.toFixed(1)}" y="180" text-anchor="middle" font-size="11" font-weight="700" fill="#14162B">${wk.label}</text>`;
+    bars += wk.totalPosts ? `<text x="${cx.toFixed(1)}" y="195" text-anchor="middle" font-size="9.5" fill="#6B7280">${wk.totalPosts} post${wk.totalPosts===1?'':'s'}</text>` : '';
+  });
+  return `<svg viewBox="0 0 ${w} ${h}"><line x1="0" y1="${baseline}" x2="${w}" y2="${baseline}" stroke="#E4E7EC" stroke-width="1"/>${bars}</svg>`;
+}
+
+// Single combined bar per week (sum across all channels) — the simpler default view.
+function buildCombinedBarChart(weekly){
+  if(!weekly.length) return '<div class="empty-note">Weekly trend needs either a Meta CSV/Excel upload with dates, or the Week 1–5 views fields filled in.</div>';
+  const w=620, baseline=160, top=30, h=196;
+  const maxV = Math.max(...weekly.map(d=>d.totalViews),1);
   const n = weekly.length;
   const slot = w/n;
   const barW = Math.min(90, slot*0.5);
   let bars='';
   weekly.forEach((d,i)=>{
-    const bh = Math.max(2,(d.views/maxV)*(baseline-top));
+    const bh = Math.max(2,(d.totalViews/maxV)*(baseline-top));
     const x = i*slot + (slot-barW)/2;
     const y = baseline-bh;
     const color = BAR_COLORS[i%BAR_COLORS.length];
     bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="4" fill="${color}"/>`;
-    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${Math.max(14,y-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#0E1650">${d.views.toLocaleString()}</text>`;
+    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${Math.max(14,y-10).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#0E1650">${d.totalViews.toLocaleString()}</text>`;
     bars += `<text x="${(x+barW/2).toFixed(1)}" y="180" text-anchor="middle" font-size="11" font-weight="700" fill="#14162B">${d.label}</text>`;
-    bars += d.posts ? `<text x="${(x+barW/2).toFixed(1)}" y="195" text-anchor="middle" font-size="9.5" fill="#6B7280">${d.posts} post${d.posts===1?'':'s'}</text>` : '';
+    bars += d.totalPosts ? `<text x="${(x+barW/2).toFixed(1)}" y="195" text-anchor="middle" font-size="9.5" fill="#6B7280">${d.totalPosts} post${d.totalPosts===1?'':'s'}</text>` : '';
   });
   return `<svg viewBox="0 0 ${w} ${h}"><line x1="0" y1="${baseline}" x2="${w}" y2="${baseline}" stroke="#E4E7EC" stroke-width="1"/>${bars}</svg>`;
+}
+
+function buildChannelLegend(channelOrder, colorMap){
+  if(channelOrder.length<=1) return '';
+  return '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px;">' +
+    channelOrder.map(ch=>`<span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:var(--text);"><span style="width:9px;height:9px;border-radius:50%;background:${colorMap[ch]};display:inline-block;"></span>${esc(ch)}</span>`).join('') +
+    '</div>';
+}
+
+// Swaps the on-screen chart between one combined bar per week and platform-split grouped
+// bars — purely a preview toggle (no-print), since a printed PDF is a static snapshot and
+// can't itself hold an interactive control. Whichever mode is showing when Print is clicked
+// is what ends up in the exported PDF.
+function setChartMode(mode){
+  const agg = computeAggregates();
+  const colorMap = buildColorMap(agg.channelOrder);
+  const target = document.getElementById('chartRenderArea');
+  if(!target) return;
+  if(mode==='platform'){
+    const chans = agg.channelOrder.filter(ch=>agg.weekly.some(w=>w.channels[ch]));
+    target.innerHTML = buildGroupedBarChart(agg.weekly, agg.channelOrder, colorMap) + buildChannelLegend(chans, colorMap);
+  } else {
+    target.innerHTML = buildCombinedBarChart(agg.weekly);
+  }
+  document.querySelectorAll('.chart-toggle-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
+}
+
+// Compact side-by-side comparison of each channel's overall total — this is what covers
+// channels that DON'T have per-week data (e.g. TikTok/LinkedIn/YouTube with just a typed
+// monthly total, no per-post file), so they still show up somewhere instead of only being
+// blended into the one big combined Total Views figure at the top.
+function buildChannelTotalsRow(channelTotals, channelOrder, colorMap){
+  const labels = channelOrder.filter(ch=>channelTotals[ch]);
+  if(labels.length<=1) return '';
+  const maxV = Math.max(...labels.map(ch=>channelTotals[ch]),1);
+  const rows = labels.map(ch=>{
+    const v = channelTotals[ch];
+    const pct = Math.max(4, Math.round(v/maxV*100));
+    return `<div style="display:flex; align-items:center; gap:10px; margin-bottom:7px;">
+      <div style="width:100px; font-size:11px; font-weight:700; color:var(--text); flex-shrink:0;">${esc(ch)}</div>
+      <div style="flex:1; background:#F0F1F4; border-radius:5px; height:14px;">
+        <div style="width:${pct}%; background:${colorMap[ch]}; height:100%; border-radius:5px;"></div>
+      </div>
+      <div style="width:74px; text-align:right; font-size:11.5px; font-weight:800; color:var(--navy); flex-shrink:0;">${fmt(v)}</div>
+    </div>`;
+  }).join('');
+  return `<div class="col-title" style="margin-top:16px;">Total Views by Channel</div><div>${rows}</div>`;
 }
 
 function buildDial(pct){
@@ -1234,6 +1373,7 @@ function buildDial(pct){
 /* ================= REPORT RENDER ================= */
 function generateReport(){
   const agg = computeAggregates();
+  const channelColorMap = buildColorMap(agg.channelOrder);
   const s = agg.sums;
 
   const client = txt('d_client');
@@ -1260,7 +1400,6 @@ function generateReport(){
   const goalCurrent = numOrNull('d_goalcurrent');
   const goalMetric = txt('d_goalmetric') || 'Views';
   const goalPct = (goalTarget && goalCurrent!==null && goalTarget>0) ? Math.round(goalCurrent/goalTarget*100) : null;
-  const audience = numOrNull('d_audience');
 
   const period = txt('d_period');
 
@@ -1348,26 +1487,29 @@ function generateReport(){
               <div class="big">${goalCurrent!==null||goalTarget!==null ? (fmt(goalCurrent)+' → '+fmt(goalTarget)) : ''}</div>
               <div class="small">CURRENT — 90-DAY ${esc(goalMetric.toUpperCase())} TARGET</div>
             </div>
-            <div class="audience-chip">
-              <div class="n">${fmt(audience)}</div>
-              <div class="l">Current Follower Audience</div>
-            </div>
           </div>
         </div>
 
         <div class="col-chart">
           <div class="col-title">Views by Week <span>· ${esc(agg.weeklySourceLabel || 'no data')}</span>
             <span class="tip">i<span class="tip-bubble">"Auto" means these come from an uploaded file with real post dates. "Manual" means a PO typed weekly totals in by hand (No Meta Access mode). "Auto + manual" means this report mixes both across different channels.</span></span>
+            ${agg.channelOrder.filter(ch=>agg.weekly.some(w=>w.channels[ch])).length>1 ? `
+            <span class="no-print chart-toggle">
+              <button type="button" class="chart-toggle-btn active" data-mode="combined" onclick="setChartMode('combined')">Combined</button
+              ><button type="button" class="chart-toggle-btn" data-mode="platform" onclick="setChartMode('platform')">By Platform</button>
+            </span>` : ''}
           </div>
           <div class="chart-wrap">
             <div class="chart-legend">
-              <span class="meta">${(()=>{ const active=agg.weekly.filter(w=>w.views>0||w.posts>0).length; return active? active+' posting week'+(active===1?'':'s') : ''; })()}</span>
+              <span class="meta">${(()=>{ const active=agg.weekly.filter(w=>w.totalViews>0||w.totalPosts>0).length; return active? active+' posting week'+(active===1?'':'s') : ''; })()}</span>
               <span class="chart-insight"></span>
             </div>
-            ${buildBarChart(agg.weekly)}
+            <div id="chartRenderArea">${buildCombinedBarChart(agg.weekly)}</div>
           </div>
         </div>
       </div>
+      <div class="no-print" id="chartModeHint" style="font-size:10.5px; color:var(--muted); margin-top:6px;">The toggle above only affects this on-screen preview — whichever view is showing when you print/export becomes part of the PDF.</div>
+      ${buildChannelTotalsRow(agg.channelTotals, agg.channelOrder, channelColorMap)}
     </div>
 
     <div class="grid3">
@@ -1448,6 +1590,7 @@ function printReport(){
       html,body{ margin:0; padding:0; background:#fff; }
       .sheet{ margin:0 !important; box-shadow:none !important; width:297mm; height:210mm; overflow:hidden; }
       .sheet .tip{ display:none !important; }
+      .sheet .no-print{ display:none !important; }
       @page{ size:A4 landscape; margin:0; }
     </style>
   </head><body>${sheet.outerHTML}</body></html>`;
@@ -1482,7 +1625,7 @@ function printReport(){
 }
 
 /* ================= DRAFT AUTOSAVE (localStorage) ================= */
-const FIELD_IDS = ['d_client','d_period','d_prevviews','d_goaltarget','d_goalcurrent','d_goalmetric','d_audience',
+const FIELD_IDS = ['d_client','d_period','d_prevviews','d_goaltarget','d_goalcurrent','d_goalmetric',
   'd_adsstatus','d_adsnote','d_funnelstatus','d_funnelnote','d_lpstatus','d_lpnote','d_otherwin',
   'd_p1','d_p2','d_p3','tp1_title','tp1_views','tp1_likes','tp1_url','tp2_title','tp2_views','tp2_likes','tp2_url',
   'tp3_title','tp3_views','tp3_likes','tp3_url','mm_views','mm_posts','mm_follows','mm_wk1','mm_wk2','mm_wk3','mm_wk4','mm_wk5','im_follows',
@@ -1492,6 +1635,59 @@ const FIELD_IDS = ['d_client','d_period','d_prevviews','d_goaltarget','d_goalcur
 
 function serializeRows(rows){ return (rows||[]).map(r=>({...r, date: r.date? r.date.toISOString(): null})); }
 function deserializeRows(rows){ return (rows||[]).map(r=>({...r, date: r.date? new Date(r.date): null})); }
+
+/* ================= NOTION CLIENT LOOKUP =================
+   Optional convenience layer — pulls 90-Day Goal/Metric/Phase/Stage from the Project
+   Tracker so POs don't retype static client info every month. Entirely best-effort: if
+   the /api endpoints aren't reachable (e.g. someone opened this file locally instead of
+   via the deployed Vercel URL), everything just silently falls back to manual entry —
+   nothing here should ever block or break the rest of the tool. Never writes back to
+   Notion — this only ever reads. */
+let __clientLookupTimer = null;
+
+async function loadClientList(){
+  try{
+    const res = await fetch('/api/clients-list');
+    if(!res.ok) return;
+    const data = await res.json();
+    const list = document.getElementById('clientNameList');
+    if(list && Array.isArray(data.clients)){
+      list.innerHTML = data.clients.map(c=>`<option value="${esc(c)}">`).join('');
+    }
+  }catch(e){ /* Notion lookup not available from this context — manual entry works as normal */ }
+}
+
+function onClientNameInput(){
+  clearTimeout(__clientLookupTimer);
+  const statusEl = document.getElementById('clientNotionStatus');
+  const name = document.getElementById('d_client').value.trim();
+  if(!name){ if(statusEl) statusEl.innerHTML = ''; return; }
+  __clientLookupTimer = setTimeout(()=>lookupClientFromNotion(name, false), 500);
+}
+
+async function lookupClientFromNotion(name, forceOverwrite){
+  const statusEl = document.getElementById('clientNotionStatus');
+  if(!statusEl) return;
+  statusEl.textContent = 'Checking Project Tracker…';
+  try{
+    const res = await fetch('/api/client-lookup?name='+encodeURIComponent(name));
+    if(!res.ok){ statusEl.textContent = ''; return; } // API not reachable — fail silently, manual entry unaffected
+    const data = await res.json();
+    if(!data.found){
+      statusEl.textContent = 'Not found in Project Tracker — fill in manually.';
+      return;
+    }
+    const tgt = document.getElementById('d_goaltarget');
+    const cur = document.getElementById('d_goalcurrent');
+    const met = document.getElementById('d_goalmetric');
+    if(forceOverwrite || !tgt.value) if(data.goalTarget!=null) tgt.value = data.goalTarget;
+    if(forceOverwrite || !cur.value) if(data.goalAchieved!=null) cur.value = data.goalAchieved;
+    if(forceOverwrite || !met.value) if(data.goalMetric) met.value = data.goalMetric;
+    const chips = [data.phase, data.stage].filter(Boolean).map(esc).join(' · ');
+    statusEl.innerHTML = '✓ Synced from Project Tracker'+(chips?' — <b>'+chips+'</b>':'')+' <a href="#" onclick="lookupClientFromNotion(\''+name.replace(/'/g,"\\'")+'\', true); return false;" style="color:var(--navy-2); text-decoration:underline;">Refresh &amp; overwrite</a>';
+    saveDraft();
+  }catch(e){ statusEl.textContent = ''; } // network/API not available — silent, doesn't block manual entry
+}
 
 function saveDraft(){
   try{
@@ -1564,7 +1760,9 @@ if(window.self !== window.top){
 }
 
 /* init */
+loadClientList();
 loadDraft();
+if(document.getElementById('d_client').value.trim()) onClientNameInput();
 refreshStep2Blocks();
 recalcMetaManualViews();
 ['tiktok','linkedin','youtube'].forEach(key=>{
