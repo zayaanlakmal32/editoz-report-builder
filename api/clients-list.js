@@ -1,9 +1,11 @@
 // api/clients-list.js
 // Returns every client name in the Project Tracker, for the autocomplete dropdown in Step 3.
-// Cheap to cache on the frontend (client list doesn't change minute to minute).
+//
+// Uses Notion API version 2025-09-03+ (the "data sources" model) — see client-lookup.js
+// for why /v1/data_sources/ is required instead of the old /v1/databases/ endpoint.
 export default async function handler(req, res) {
   const NOTION_TOKEN = process.env.NOTION_TOKEN;
-  const DATABASE_ID = process.env.NOTION_PROJECT_TRACKER_ID || 'b6b396fe-f0cf-4d7e-9845-e18c630c0ae7';
+  const DATA_SOURCE_ID = process.env.NOTION_PROJECT_TRACKER_ID || 'b6b396fe-f0cf-4d7e-9845-e18c630c0ae7';
 
   if (!NOTION_TOKEN) {
     return res.status(500).json({ error: 'NOTION_TOKEN is not configured on the server' });
@@ -13,11 +15,11 @@ export default async function handler(req, res) {
     let names = [];
     let cursor = undefined;
     do {
-      const response = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
+      const response = await fetch(`https://api.notion.com/v1/data_sources/${DATA_SOURCE_ID}/query`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${NOTION_TOKEN}`,
-          'Notion-Version': '2022-06-28',
+          'Notion-Version': '2025-09-03',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ start_cursor: cursor, page_size: 100 }),
@@ -36,4 +38,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Server error', detail: err.message });
   }
 }
-
