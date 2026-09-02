@@ -437,18 +437,22 @@
     <!-- LINKEDIN MANUAL -->
     <div class="source-block" id="block-linkedin">
       <h3>LinkedIn <span class="badge-manual">manual — no parser yet</span>
-        <span class="tip">i<span class="tip-bubble">Type these in by hand normally. But if you upload the per-post file below, Posts/Likes/Comments/Shares are recalculated from that file automatically — <b>whichever you did last wins</b>, so upload first, then check these before generating the report.</span></span>
+        <span class="tip">i<span class="tip-bubble">Type these in by hand normally. But if you upload the per-post file below, Views/Posts/Likes/Comments/Shares are recalculated from that file automatically — <b>whichever you did last wins</b>, so upload first, then check these before generating the report.</span></span>
       </h3>
-      <div class="small-note" style="margin-bottom:10px;">Views/Impressions aren't pooled into the Total Views figure for LinkedIn — not tracked here by design.</div>
       <div class="field-row3">
+        <div class="field-group" id="li_views_wrap"><label>Total Views <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_views"></div>
         <div class="field-group" id="li_posts_wrap"><label>Posts Published <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_posts"></div>
         <div class="field-group" id="li_likes_wrap"><label>Reactions (Likes) <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_likes"></div>
-        <div class="field-group" id="li_comments_wrap"><label>Comments <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_comments"></div>
       </div>
       <div class="field-row3">
+        <div class="field-group" id="li_comments_wrap"><label>Comments <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_comments"></div>
         <div class="field-group" id="li_shares_wrap"><label>Shares <span class="auto-tag">AUTO-FILLED</span></label><input type="number" id="li_shares"></div>
         <div class="field-group"><label>Followers — current</label><input type="number" id="li_foll_now"></div>
+      </div>
+      <div class="field-row3">
         <div class="field-group"><label>Followers — last month</label><input type="number" id="li_foll_prev"></div>
+        <div class="field-group"></div>
+        <div class="field-group"></div>
       </div>
       <div style="margin-top:12px;">
         <button class="btn btn-ghost" type="button" onclick="downloadTemplate()">⬇ Download blank Excel template</button>
@@ -457,7 +461,7 @@
       <div class="upload-box" style="background:#fff; border-style:dashed;" onclick="document.getElementById('li_file').click()">
         <input type="file" id="li_file" accept=".csv,.xlsx,.xls" multiple onchange="handleExtraFile(event,'linkedin','liStatus')">
         <div class="u-title">Upload the filled-in template (or any per-post dates)</div>
-        <div class="u-sub">Fills in Posts/Likes/Comments/Shares above from this file, and unlocks Views by Week + Top Content. Select multiple files at once if you have more than one export. Skip it and those all stay manual/blank.</div>
+        <div class="u-sub">Fills in Views/Posts/Likes/Comments/Shares above from this file, and unlocks Views by Week + Top Content. Select multiple files at once if you have more than one export. Skip it and those all stay manual/blank.</div>
       </div>
       <div class="upload-status" id="liStatus"></div>
     </div>
@@ -673,7 +677,7 @@ function recalcMetaManualViews(){
 // while backed by a file; unlock again if the file is removed/rejected.
 const AUTO_FIELD_MAP = {
   tiktok:   { views:'tt_views', posts:'tt_posts', likes:'tt_likes', comments:'tt_comments', shares:'tt_shares', saves:'tt_saves' },
-  linkedin: { posts:'li_posts', likes:'li_likes', comments:'li_comments', shares:'li_shares' },
+  linkedin: { views:'li_views', posts:'li_posts', likes:'li_likes', comments:'li_comments', shares:'li_shares' },
   youtube:  { views:'yt_views', posts:'yt_posts', likes:'yt_likes', comments:'yt_comments', shares:'yt_shares' },
 };
 function setAutoField(id, value){
@@ -1003,7 +1007,6 @@ function handleExtraFile(evt, key, statusId){
       rejectExtraUpload('All '+normalized.length+' rows fall outside '+monthLabel(getReportMonthFilter())+' — check the file'+(files.length>1?'s':'')+' or the Report Month field on Step 1.');
       return;
     }
-    if(key==='linkedin'){ filtered.forEach(r=>{ r.views = 0; }); } // Views/Impressions intentionally not tracked for LinkedIn
     STATE.extraRows[key] = filtered;
     applyAutoTotals(key, filtered);
     const thinWarning = filtered.length===1 ? ' ⚠ Only 1 dated post found — check you uploaded the full month, not a single example row.' : '';
@@ -1135,15 +1138,18 @@ function computeAggregates(){
     foldIntoWeeklyAndPool(STATE.extraRows.tiktok, 'TikTok');
   }
 
-  // LinkedIn — Views intentionally not tracked (skipped); totals manual; followers = current − last month
+  // LinkedIn — totals always manual; followers computed as current − last month
   if(STATE.channels.linkedin){
+    const liViews = Number(document.getElementById('li_views').value)||0;
+    sums.views += liViews;
     sums.likes += Number(document.getElementById('li_likes').value)||0;
     sums.comments += Number(document.getElementById('li_comments').value)||0;
     sums.shares += Number(document.getElementById('li_shares').value)||0;
     sums.posts += Number(document.getElementById('li_posts').value)||0;
     const liNow = document.getElementById('li_foll_now').value, liPrev = document.getElementById('li_foll_prev').value;
     if(liNow!=='' && liPrev!=='') sums.follows += (Number(liNow)-Number(liPrev));
-    foldIntoWeeklyAndPool(STATE.extraRows.linkedin, 'LinkedIn'); // views are zeroed at upload time — excluded from the views-based channel comparison, not meaningful at 0
+    if(liViews) addChannelTotal('LinkedIn', liViews);
+    foldIntoWeeklyAndPool(STATE.extraRows.linkedin, 'LinkedIn');
   }
 
   // YouTube — totals always manual; subscribers computed as current − last month
@@ -1630,7 +1636,7 @@ const FIELD_IDS = ['d_client','d_period','d_prevviews','d_goaltarget','d_goalcur
   'd_p1','d_p2','d_p3','tp1_title','tp1_views','tp1_likes','tp1_url','tp2_title','tp2_views','tp2_likes','tp2_url',
   'tp3_title','tp3_views','tp3_likes','tp3_url','mm_views','mm_posts','mm_follows','mm_wk1','mm_wk2','mm_wk3','mm_wk4','mm_wk5','im_follows',
   'tt_views','tt_posts','tt_likes','tt_comments','tt_shares','tt_saves','tt_reach','tt_foll_now','tt_foll_prev',
-  'li_posts','li_likes','li_comments','li_shares','li_foll_now','li_foll_prev',
+  'li_views','li_posts','li_likes','li_comments','li_shares','li_foll_now','li_foll_prev',
   'yt_views','yt_posts','yt_likes','yt_comments','yt_shares','yt_sub_now','yt_sub_prev','reportMonthFilter'];
 
 function serializeRows(rows){ return (rows||[]).map(r=>({...r, date: r.date? r.date.toISOString(): null})); }
