@@ -1035,17 +1035,22 @@ function val(v){ return (v===undefined||v===null||v==='' || Number.isNaN(v)) ? '
 function numOrNull(id){ const v = document.getElementById(id).value; return v===''? null : Number(v); }
 function txt(id){ return document.getElementById(id).value.trim(); }
 function fmt(n){ return (n===null||n===undefined||n==='') ? '' : Number(n).toLocaleString(); }
-// ISO-8601 week key (Monday-Sunday weeks, week 1 = the week containing the year's first
-// Thursday) — matches the "ISO week" grouping the report spec calls for, instead of chopping
-// the month into blind 7-day chunks starting from the 1st.
-function weekBucketKey(date){
+// Computes which "Week N" (1-5) of a given month a date falls into, anchored to the first
+// Monday on-or-after day 1 of that month — NOT just sequential numbering of whichever weeks
+// happen to have posts. Without this anchor, a report whose data starts mid-month (e.g. a
+// new phase beginning Aug 12) would mislabel its first real week as "Week 1" instead of
+// correctly showing it as "Week 2" or "Week 3" — throwing off which week looks highest.
+function weekOfMonthAnchor(year, month0){ // month0 is 0-indexed (Date convention)
+  const firstDay = new Date(Date.UTC(year, month0, 1));
+  const dow = firstDay.getUTCDay() || 7; // Mon=1..Sun=7
+  const daysToMonday = dow===1 ? 0 : (8-dow);
+  return new Date(Date.UTC(year, month0, 1 + daysToMonday)); // Monday of "Week 1" for this month
+}
+function weekOfMonthIndex(date, anchorMonday){
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const isoYear = d.getUTCFullYear();
-  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
-  const isoWeekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return isoYear + '-W' + String(isoWeekNum).padStart(2,'0');
+  const diffDays = Math.floor((d - anchorMonday) / 86400000);
+  const idx = Math.floor(diffDays / 7) + 1;
+  return Math.max(1, Math.min(5, idx)); // clamp so an edge-case date never gets silently dropped
 }
 // Escapes user- or file-supplied text before it's inserted into the report's HTML.
 function esc(s){
@@ -1056,10 +1061,8 @@ function esc(s){
 /* ================= AGGREGATION ================= */
 function computeAggregates(){
   const sums = {views:0, likes:0, comments:0, shares:0, saves:0, follows:0, posts:0, reach:0};
-  const weeklyMap = {}; // { 'YYYY-Www': { ChannelLabel: {views, posts} } }
   const postTypeCounts = {};
   const channelTotals = {}; // ChannelLabel -> total views, for ALL active channels (even ones with no per-week data)
-  const channelsWithWeeklyData = new Set();
 
   let datedPosts = []; // pooled across every source that has per-post dates — trend/top-content only
   let hasDatedRows = false;
@@ -1088,13 +1091,7 @@ function computeAggregates(){
       const chLabel = typeof channelLabelFn === 'function' ? channelLabelFn(r) : channelLabelFn;
       if(r.date){
         hasDatedRows = true;
-        channelsWithWeeklyData.add(chLabel);
-        const wk = weekBucketKey(r.date);
-        if(!weeklyMap[wk]) weeklyMap[wk] = {};
-        if(!weeklyMap[wk][chLabel]) weeklyMap[wk][chLabel] = {views:0, posts:0};
-        weeklyMap[wk][chLabel].views += r.views;
-        weeklyMap[wk][chLabel].posts += 1;
-        datedPosts.push({...r, channel: r.client || chLabel});
+        datedPosts.push({...r, channel: r.client || chLabel, __chLabel: chLabel});
       }
     });
   }
@@ -1166,15 +1163,40 @@ function computeAggregates(){
     foldIntoWeeklyAndPool(STATE.extraRows.youtube, 'YouTube');
   }
 
-  // Weekly array: union of every week that has dated data, each carrying a per-channel breakdown
+  // Weekly array: always 5 slots, anchored to the report's actual month — not just
+  // sequential numbering of whichever weeks happen to have posts (see weekOfMonthIndex).
   let weekly = [];
+  const channelsWithWeeklyData = new Set();
   if(hasDatedRows){
-    const keys = Object.keys(weeklyMap).sort();
-    weekly = keys.map((k,i)=>{
-      const chMap = weeklyMap[k];
-      const totalViews = Object.values(chMap).reduce((a,c)=>a+c.views,0);
-      const totalPosts = Object.values(chMap).reduce((a,c)=>a+c.posts,0);
-      return { label:'Week '+(i+1), channels:chMap, totalViews, totalPosts };
+    // Target month: the Report Month filter if set, else whichever year-month appears most
+    // often among the dated posts (handles the common case where no filter was set).
+    const rm = getReportMonthFilter();
+    let targetYear, targetMonth0;
+    if(rm){
+      const [y,m] = rm.split('-').map(Number);
+      targetYear = y; targetMonth0 = m-1;
+    } else {
+      const counts = {};
+      datedPosts.forEach(p=>{
+        const key = p.date.getFullYear()+'-'+p.date.getMonth();
+        counts[key] = (counts[key]||0)+1;
+      });
+      const bestKey = Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+      const [y,m] = bestKey.split('-').map(Number);
+      targetYear = y; targetMonth0 = m;
+    }
+    const anchor = weekOfMonthAnchor(targetYear, targetMonth0);
+    weekly = [1,2,3,4,5].map(n=>({ label:'Week '+n, channels:{}, totalViews:0, totalPosts:0 }));
+    datedPosts.forEach(p=>{
+      const idx = weekOfMonthIndex(p.date, anchor); // 1-5
+      const slot = weekly[idx-1];
+      const chLabel = p.__chLabel;
+      channelsWithWeeklyData.add(chLabel);
+      if(!slot.channels[chLabel]) slot.channels[chLabel] = {views:0, posts:0};
+      slot.channels[chLabel].views += p.views;
+      slot.channels[chLabel].posts += 1;
+      slot.totalViews += p.views;
+      slot.totalPosts += 1;
     });
   }
 
