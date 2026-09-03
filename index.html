@@ -935,34 +935,48 @@ function handleMetaFile(evt){
   const statusEl = document.getElementById('metaStatus');
   if(!files || !files.length){ return; }
   statusEl.className='upload-status'; statusEl.textContent='Reading file'+(files.length>1?'s':'')+'…';
+  const previousRows = STATE.metaRowsAll.slice(); // keep whatever was already uploaded — a second upload adds to it, never replaces it
 
   function rejectMetaUpload(message){
-    STATE.metaRowsAll = [];
-    STATE.metaClientKeys = null;
-    document.getElementById('clientPickWrap').style.display = 'none';
-    document.getElementById('clientPickerList').innerHTML = '';
-    statusEl.className = 'upload-status err';
-    statusEl.textContent = message + ' Nothing is loaded for this channel until a file passes — the report will show this section blank, not old data.';
+    // Only wipe existing data if THIS is the first upload attempt. If something was already
+    // successfully loaded before this call, a failed second file shouldn't destroy it — the
+    // PO should just be told this specific file didn't work, not lose their earlier progress.
+    if(!previousRows.length){
+      STATE.metaRowsAll = [];
+      STATE.metaClientKeys = null;
+      document.getElementById('clientPickWrap').style.display = 'none';
+      document.getElementById('clientPickerList').innerHTML = '';
+      statusEl.className = 'upload-status err';
+      statusEl.textContent = message + ' Nothing is loaded for this channel until a file passes — the report will show this section blank, not old data.';
+    } else {
+      statusEl.className = 'upload-status err';
+      statusEl.textContent = message + ' The '+previousRows.length+' row(s) already loaded from an earlier upload are unaffected.';
+    }
     saveDraft();
   }
 
-  parseWorkbookFiles(files, (normalized, fileResults, duplicates)=>{
+  parseWorkbookFiles(files, (normalized, fileResults, duplicatesThisBatch)=>{
     const failed = fileResults.filter(f=>f.error);
     const fileNote = fileResults.length>1 ? ' from '+fileResults.length+' files'+(failed.length?' ('+failed.length+' failed — see below)':'')+':  '+fileResults.map(f=>f.error?(f.name+' ✗'):(f.name+' ('+f.rowCount+' rows)')).join(', ') : '';
-    const dupeWarning = duplicates ? ' ⚠ '+duplicates+' duplicate post'+(duplicates===1?'':'s')+' found and skipped (same post appeared in more than one file/sheet) — check you didn\'t upload overlapping exports.' : '';
     const {rows:filtered, excluded} = filterToReportMonth(normalized);
     if(!filtered.length){
       rejectMetaUpload('All '+normalized.length+' rows fall outside '+monthLabel(getReportMonthFilter())+' — check the file'+(files.length>1?'s':'')+' or the Report Month field on Step 1.');
       return;
     }
-    STATE.metaRowsAll = filtered;
-    const clients = [...new Set(filtered.map(r=>r.client).filter(Boolean))];
+    // Merge with anything already uploaded this session, then re-run dedup across the FULL
+    // combined set — catches a post appearing in both this upload and an earlier one, not
+    // just duplicates within this single batch.
+    const {rows:deduped, duplicates} = dedupeRows([...previousRows, ...filtered]);
+    const crossBatchDupes = duplicates; // includes both this-batch and cross-upload duplicates
+    STATE.metaRowsAll = deduped;
+    const dupeWarning = crossBatchDupes ? ' ⚠ '+crossBatchDupes+' duplicate post'+(crossBatchDupes===1?'':'s')+' found and skipped (same post appeared in more than one file/sheet/upload) — check you didn\'t upload overlapping exports.' : '';
+    const clients = [...new Set(STATE.metaRowsAll.map(r=>r.client).filter(Boolean))];
     const wrap = document.getElementById('clientPickWrap');
     const listEl = document.getElementById('clientPickerList');
     listEl.innerHTML='';
     if(clients.length>1){
       clients.forEach(c=>{
-        const n = filtered.filter(r=>r.client===c).length;
+        const n = STATE.metaRowsAll.filter(r=>r.client===c).length;
         const row = document.createElement('label');
         row.style.cssText = 'display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--text);';
         row.innerHTML = '<input type="checkbox" value="'+esc(c)+'" checked onchange="onClientPicked()"> '+esc(c)+' ('+n+' posts)';
@@ -974,8 +988,10 @@ function handleMetaFile(evt){
       wrap.style.display='none';
       STATE.metaClientKeys = clients.length ? [clients[0]] : null;
     }
-    statusEl.className = 'upload-status ' + ((failed.length||duplicates) ? 'warn' : 'ok');
-    statusEl.textContent = (failed.length||duplicates?'':'✓ ')+'Loaded '+filtered.length+' rows'+fileNote+(excluded? ' ('+excluded+' excluded — outside Report Month)':'')+(clients.length>1?' across '+clients.length+' accounts — pick which to include above.':'.')+dupeWarning;
+    const netNew = STATE.metaRowsAll.length - previousRows.length;
+    const addedNote = previousRows.length ? ' ('+netNew+' new, '+STATE.metaRowsAll.length+' total across all uploads)' : '';
+    statusEl.className = 'upload-status ' + ((failed.length||crossBatchDupes) ? 'warn' : 'ok');
+    statusEl.textContent = (failed.length||crossBatchDupes?'':'✓ ')+'Loaded '+STATE.metaRowsAll.length+' rows'+addedNote+fileNote+(excluded? ' ('+excluded+' excluded — outside Report Month)':'')+(clients.length>1?' across '+clients.length+' accounts — pick which to include above.':'.')+dupeWarning;
     saveDraft();
   }, (err)=>{
     rejectMetaUpload(err.message);
@@ -994,28 +1010,37 @@ function handleExtraFile(evt, key, statusId){
   const statusEl = document.getElementById(statusId);
   if(!files || !files.length){ return; }
   statusEl.className='upload-status'; statusEl.textContent='Reading file'+(files.length>1?'s':'')+'…';
+  const previousRows = STATE.extraRows[key].slice(); // a second upload adds to what's already loaded, never replaces it
   function rejectExtraUpload(message){
-    STATE.extraRows[key] = [];
-    unlockAutoFields(key);
-    statusEl.className = 'upload-status err';
-    statusEl.textContent = message + ' Nothing is loaded for this channel until a file passes — the totals above stay whatever you last typed.';
+    if(!previousRows.length){
+      STATE.extraRows[key] = [];
+      unlockAutoFields(key);
+      statusEl.className = 'upload-status err';
+      statusEl.textContent = message + ' Nothing is loaded for this channel until a file passes — the totals above stay whatever you last typed.';
+    } else {
+      statusEl.className = 'upload-status err';
+      statusEl.textContent = message + ' The '+previousRows.length+' row(s) already loaded from an earlier upload are unaffected.';
+    }
     saveDraft();
   }
 
-  parseWorkbookFiles(files, (normalized, fileResults, duplicates)=>{
+  parseWorkbookFiles(files, (normalized, fileResults, duplicatesThisBatch)=>{
     const failed = fileResults.filter(f=>f.error);
     const fileNote = fileResults.length>1 ? ' from '+fileResults.length+' files'+(failed.length?' ('+failed.length+' failed — see below)':'')+':  '+fileResults.map(f=>f.error?(f.name+' ✗'):(f.name+' ('+f.rowCount+' rows)')).join(', ') : '';
-    const dupeWarning = duplicates ? ' ⚠ '+duplicates+' duplicate post'+(duplicates===1?'':'s')+' found and skipped (same post appeared in more than one file/sheet) — check you didn\'t upload overlapping exports.' : '';
     const {rows:filtered, excluded} = filterToReportMonth(normalized);
     if(!filtered.length){
       rejectExtraUpload('All '+normalized.length+' rows fall outside '+monthLabel(getReportMonthFilter())+' — check the file'+(files.length>1?'s':'')+' or the Report Month field on Step 1.');
       return;
     }
-    STATE.extraRows[key] = filtered;
-    applyAutoTotals(key, filtered);
-    const thinWarning = filtered.length===1 ? ' ⚠ Only 1 dated post found — check you uploaded the full month, not a single example row.' : '';
+    const {rows:deduped, duplicates} = dedupeRows([...previousRows, ...filtered]);
+    STATE.extraRows[key] = deduped;
+    applyAutoTotals(key, deduped);
+    const netNew = deduped.length - previousRows.length;
+    const addedNote = previousRows.length ? ' ('+netNew+' new, '+deduped.length+' total across all uploads)' : '';
+    const thinWarning = deduped.length===1 ? ' ⚠ Only 1 dated post found — check you uploaded the full month, not a single example row.' : '';
+    const dupeWarning = duplicates ? ' ⚠ '+duplicates+' duplicate post'+(duplicates===1?'':'s')+' found and skipped (same post appeared in more than one file/sheet/upload) — check you didn\'t upload overlapping exports.' : '';
     statusEl.className = 'upload-status ' + ((thinWarning||failed.length||duplicates) ? 'warn' : 'ok');
-    statusEl.textContent = (thinWarning||failed.length||duplicates?'':'✓ ')+'Loaded '+filtered.length+' dated post'+(filtered.length===1?'':'s')+fileNote+(excluded? ' ('+excluded+' excluded — outside Report Month)':'')+' — totals above now come from this file.'+thinWarning+dupeWarning;
+    statusEl.textContent = (thinWarning||failed.length||duplicates?'':'✓ ')+'Loaded '+deduped.length+' dated post'+(deduped.length===1?'':'s')+addedNote+fileNote+(excluded? ' ('+excluded+' excluded — outside Report Month)':'')+' — totals above now come from this file.'+thinWarning+dupeWarning;
     saveDraft();
   }, (err)=>{
     rejectExtraUpload(err.message);
