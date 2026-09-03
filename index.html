@@ -355,7 +355,9 @@
       <div class="upload-status" id="metaStatus"></div>
       <div class="client-pick" id="clientPickWrap" style="display:none;">
         <div class="field-group">
-          <label>This file has multiple accounts — which one(s) is this report for?</label>
+          <label>This file has multiple accounts — which one(s) is this report for?
+            <span class="tip">i<span class="tip-bubble">An unfamiliar name here doesn't always mean unrelated content — a guest feature or collaboration post can show up tagged under the <b>other</b> creator's account, even though it's genuinely about your client. Check the post content before unchecking an account you don't recognize.</span></span>
+          </label>
           <div id="clientPickerList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
       </div>
@@ -1235,11 +1237,36 @@ function computeAggregates(){
   else if(hasDatedRows) weeklySourceLabel = 'auto from post data';
   else if(hasManualWeeks) weeklySourceLabel = 'manual (weekly entries)';
 
+  // Meta lets a post be published to Instagram and Facebook at once ("crossposting") — Meta's
+  // own export gives that ONE piece of content two separate rows (one per platform, different
+  // Post IDs and Permalinks), each holding only that platform's share of the views. Ranking
+  // them as two separate posts understates a crossposted post's real reach and can push it
+  // out of the top 3 entirely. They share the exact same title and publish timestamp even
+  // though nothing else about the rows matches, so that pair is the reliable signal to merge
+  // on — sums/channel totals are untouched, this only affects how Top Content is ranked.
+  function mergeCrossposts(posts){
+    const groups = {};
+    posts.forEach(p=>{
+      const key = (p.title||'').trim().toLowerCase() + '|' + (p.date ? p.date.getTime() : '');
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(p);
+    });
+    return Object.values(groups).map(group=>{
+      if(group.length===1) return group[0];
+      const merged = {...group[0]};
+      merged.views = group.reduce((a,p)=>a+p.views,0);
+      merged.likes = group.reduce((a,p)=>a+p.likes,0);
+      merged.channel = [...new Set(group.map(p=>p.channel).filter(Boolean))].join(' + ');
+      merged.url = group.slice().sort((a,b)=>b.views-a.views)[0].url || '';
+      return merged;
+    });
+  }
+
   // Top posts: from any pooled dated rows if present, else manual entries
   let topPosts = [];
   let topPostsSource = '';
   if(datedPosts.length){
-    topPosts = [...datedPosts].sort((a,b)=>b.views-a.views).slice(0,3).map(p=>({title:p.title||'(untitled post)', views:p.views, likes:p.likes, posttype:p.posttype, date:p.date, channel:p.channel, url:p.url||''}));
+    topPosts = mergeCrossposts(datedPosts).sort((a,b)=>b.views-a.views).slice(0,3).map(p=>({title:p.title||'(untitled post)', views:p.views, likes:p.likes, posttype:p.posttype, date:p.date, channel:p.channel, url:p.url||''}));
     topPostsSource = 'auto';
   } else {
     [['tp1_title','tp1_views','tp1_likes','tp1_url'],['tp2_title','tp2_views','tp2_likes','tp2_url'],['tp3_title','tp3_views','tp3_likes','tp3_url']].forEach(([t,v,l,u])=>{
