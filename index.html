@@ -194,6 +194,7 @@
   .mh-title{ font-size:20px; font-weight:800; letter-spacing:-0.01em; margin:0 0 2px; }
   .mh-sub{ font-size:11px; color:#C7CEF5; }
   .mh-tag{ font-size:10px; font-weight:800; letter-spacing:0.04em; background:var(--lime); color:#0E1650; padding:6px 13px; border-radius:100px; white-space:nowrap; }
+  .mh-tag-dfy{ background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,0.6); }
 
   .stats{ display:grid; grid-template-columns:repeat(3,1fr); background:var(--card); border-radius:var(--radius); border:1px solid var(--border); margin-bottom:3.5mm; }
   .stat{ padding:3mm 4mm; border-right:1px solid var(--border); }
@@ -513,6 +514,7 @@
       <div class="field-group">
         <label>Client Name</label>
         <input type="text" id="d_client" list="clientNameList" placeholder="e.g. Dinesh Saparamadu" autocomplete="off" oninput="onClientNameInput()">
+        <input type="hidden" id="d_clientphase" value="">
         <datalist id="clientNameList"></datalist>
         <div id="clientNotionStatus" class="no-print" style="font-size:11px; margin-top:5px; color:var(--muted);"></div>
       </div>
@@ -1405,6 +1407,8 @@ function generateReport(){
   const s = agg.sums;
 
   const client = txt('d_client');
+  const clientPhase = txt('d_clientphase');
+  const isDFY = /dfy/i.test(clientPhase);
   if(!client){
     alert('Add a Client Name in Step 3 before generating the report.');
     goToStep(3);
@@ -1480,7 +1484,10 @@ function generateReport(){
         <div class="mh-title">${esc(client)||'—'}</div>
         <div class="mh-sub">Monthly Content Performance Report${period?' · '+esc(period):''}</div>
       </div>
-      <div class="mh-tag">ACCELERATE</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        ${isDFY ? '<div class="mh-tag mh-tag-dfy">DFY</div>' : ''}
+        <div class="mh-tag">ACCELERATE</div>
+      </div>
     </div>
 
     <div class="stats">
@@ -1653,7 +1660,7 @@ function printReport(){
 }
 
 /* ================= DRAFT AUTOSAVE (localStorage) ================= */
-const FIELD_IDS = ['d_client','d_period','d_prevviews','d_goaltarget','d_goalcurrent','d_goalmetric',
+const FIELD_IDS = ['d_client','d_clientphase','d_period','d_prevviews','d_goaltarget','d_goalcurrent','d_goalmetric',
   'd_adsstatus','d_adsnote','d_funnelstatus','d_funnelnote','d_lpstatus','d_lpnote','d_otherwin',
   'd_p1','d_p2','d_p3','tp1_title','tp1_views','tp1_likes','tp1_url','tp2_title','tp2_views','tp2_likes','tp2_url',
   'tp3_title','tp3_views','tp3_likes','tp3_url','mm_views','mm_posts','mm_follows','mm_wk1','mm_wk2','mm_wk3','mm_wk4','mm_wk5','im_follows',
@@ -1689,7 +1696,7 @@ function onClientNameInput(){
   clearTimeout(__clientLookupTimer);
   const statusEl = document.getElementById('clientNotionStatus');
   const name = document.getElementById('d_client').value.trim();
-  if(!name){ if(statusEl) statusEl.innerHTML = ''; return; }
+  if(!name){ if(statusEl) statusEl.innerHTML = ''; document.getElementById('d_clientphase').value = ''; return; }
   __clientLookupTimer = setTimeout(()=>lookupClientFromNotion(name, false), 500);
 }
 
@@ -1697,6 +1704,7 @@ async function lookupClientFromNotion(name, forceOverwrite){
   const statusEl = document.getElementById('clientNotionStatus');
   if(!statusEl) return;
   statusEl.textContent = 'Checking Project Tracker…';
+  document.getElementById('d_clientphase').value = ''; // clear any previous client's phase until this lookup resolves
   try{
     const res = await fetch('/api/client-lookup?name='+encodeURIComponent(name));
     if(!res.ok){ statusEl.textContent = ''; return; } // API not reachable — fail silently, manual entry unaffected
@@ -1711,6 +1719,7 @@ async function lookupClientFromNotion(name, forceOverwrite){
     if(forceOverwrite || !tgt.value) if(data.goalTarget!=null) tgt.value = data.goalTarget;
     if(forceOverwrite || !cur.value) if(data.goalAchieved!=null) cur.value = data.goalAchieved;
     if(forceOverwrite || !met.value) if(data.goalMetric) met.value = data.goalMetric;
+    document.getElementById('d_clientphase').value = data.phase || '';
     const chips = [data.phase, data.stage].filter(Boolean).map(esc).join(' · ');
     statusEl.innerHTML = '✓ Synced from Project Tracker'+(chips?' — <b>'+chips+'</b>':'')+' <a href="#" onclick="lookupClientFromNotion(\''+name.replace(/'/g,"\\'")+'\', true); return false;" style="color:var(--navy-2); text-decoration:underline;">Refresh &amp; overwrite</a>';
     saveDraft();
