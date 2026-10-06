@@ -1728,8 +1728,19 @@ function printReport(){
   const sheet = document.querySelector('.sheet');
   if(!sheet){ alert('Generate the report first.'); return; }
   fitReportToPage();
-  const styleTag = document.querySelector('style') ? document.querySelector('style').outerHTML : '';
+  // Collect the app's own stylesheet(s) explicitly. Grabbing just document.querySelector('style')
+  // (the first <style> on the page) breaks when a browser extension (dark-mode, ad-blocker,
+  // Grammarly, etc.) injects its own <style> tag ahead of ours — the print copy then ends up
+  // with the extension's CSS instead of ours and renders as an unstyled, serif wall of text.
+  // So: take every <style> that actually contains the report's rules (.sheet), falling back to
+  // all of them, plus the font <link> tags so Inter loads inside the print document too.
+  const allStyles = Array.from(document.querySelectorAll('style'));
+  let appStyles = allStyles.filter(s => (s.textContent||'').includes('.sheet'));
+  if(!appStyles.length) appStyles = allStyles;
+  const styleTag = appStyles.map(s=>s.outerHTML).join('\n');
+  const fontLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"]')).map(l=>l.outerHTML).join('\n');
   const printDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Report</title>
+    ${fontLinks}
     ${styleTag}
     <style>
       html,body{ margin:0; padding:0; background:#fff; }
