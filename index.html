@@ -1073,12 +1073,19 @@ function weekOfMonthAnchor(year, month0){ // month0 is 0-indexed (Date conventio
   const firstDay = new Date(Date.UTC(year, month0, 1));
   const dow = firstDay.getUTCDay() || 7; // Mon=1..Sun=7
   const daysToMonday = dow===1 ? 0 : (8-dow);
-  return new Date(Date.UTC(year, month0, 1 + daysToMonday)); // Monday of "Week 1" for this month
+  const anchor = new Date(Date.UTC(year, month0, 1 + daysToMonday)); // Monday of the first FULL week
+  anchor._leadDays = daysToMonday; // how many lead-in days (1st of month .. day before anchor Monday)
+  return anchor;
 }
 function weekOfMonthIndex(date, anchorMonday){
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const diffDays = Math.floor((d - anchorMonday) / 86400000);
-  const idx = Math.floor(diffDays / 7) + 1;
+  const leadDays = anchorMonday._leadDays || 0;
+  // When the month doesn't start on a Monday, the lead-in days (1st of month through the
+  // day before the anchor Monday) get their OWN "Week 1" slot instead of being merged into
+  // the first full week — otherwise Week 1 silently absorbs up to 13 days' worth of posts
+  // (lead-in + first full week combined), inflating it relative to every other week.
+  const idx = Math.floor(diffDays / 7) + 1 + (leadDays > 0 ? 1 : 0);
   return Math.max(1, Math.min(5, idx)); // clamp so an edge-case date never gets silently dropped
 }
 // Escapes user- or file-supplied text before it's inserted into the report's HTML.
