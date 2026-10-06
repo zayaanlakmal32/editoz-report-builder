@@ -781,9 +781,53 @@ function shortenTitle(s){
 /* ================= REPORT MONTH FILTER ================= */
 // Strips any dated rows that fall outside the selected Report Month, so a "last 90 days"
 // export doesn't silently inflate this month's totals.
+const MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+// Accepts whatever a PO might actually end up with in the Report Month field and normalizes
+// it to "YYYY-MM", or returns null if nothing sensible can be read from it. Needed because
+// <input type="month"> only guarantees a clean "YYYY-MM" value on browsers that support it
+// natively — Firefox desktop (and some older Safari builds) don't, so the field silently
+// degrades to a plain text box there, and a restored draft, a stray paste, or someone typing
+// the month by hand can leave it as "September 2026", "09/2026", "2026/09", "Sep 2026", etc.
+function parseMonthInput(v){
+  if(!v) return null;
+  const s = String(v).trim();
+  if(!s) return null;
+
+  // Native <input type="month"> value, or already-normalized "YYYY-MM".
+  let m = s.match(/^(\d{4})-(\d{1,2})$/);
+  if(m) return normalizeYM(Number(m[1]), Number(m[2]));
+
+  // "MM/YYYY", "M-YYYY", "MM.YYYY" — month first.
+  m = s.match(/^(\d{1,2})[\/\-.](\d{4})$/);
+  if(m) return normalizeYM(Number(m[2]), Number(m[1]));
+
+  // "YYYY/MM" — year first, slash or dot instead of hyphen.
+  m = s.match(/^(\d{4})[\/.](\d{1,2})$/);
+  if(m) return normalizeYM(Number(m[1]), Number(m[2]));
+
+  // "September 2026", "Sep 2026", "Sep, 2026" — month name (full or abbreviated) + year.
+  m = s.match(/^([A-Za-z]+)[\s,]+(\d{4})$/);
+  if(m){
+    const idx = MONTH_NAMES.findIndex(name => name.startsWith(m[1].toLowerCase()) && m[1].length>=3);
+    if(idx>=0) return normalizeYM(Number(m[2]), idx+1);
+  }
+
+  // "2026 September", "2026 Sep" — year first, then month name.
+  m = s.match(/^(\d{4})[\s,]+([A-Za-z]+)$/);
+  if(m){
+    const idx = MONTH_NAMES.findIndex(name => name.startsWith(m[2].toLowerCase()) && m[2].length>=3);
+    if(idx>=0) return normalizeYM(Number(m[1]), idx+1);
+  }
+
+  return null;
+}
+function normalizeYM(year, month){
+  if(!Number.isFinite(year) || !Number.isFinite(month) || month<1 || month>12 || year<2000 || year>2100) return null;
+  return year + '-' + String(month).padStart(2,'0');
+}
 function getReportMonthFilter(){
   const el = document.getElementById('reportMonthFilter');
-  return (el && el.value) ? el.value : null; // "YYYY-MM" or null
+  return el ? parseMonthInput(el.value) : null;
 }
 function monthLabel(v){
   if(!v) return '';
