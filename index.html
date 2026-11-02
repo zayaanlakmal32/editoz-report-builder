@@ -366,7 +366,7 @@
       </div>
       <div class="field-group" style="max-width:300px; margin-top:12px;">
         <label>New Followers Gained
-          <span class="tip">i<span class="tip-bubble">Meta's content export doesn't include follower growth — that's an account-level Audience metric, not a per-post one, so there's no file to auto-fill this from. Type it in from Meta's Audience insights (or the client) — it stays manual even when everything else above is auto.</span></span>
+          <span class="tip">i<span class="tip-bubble">Type the account-level new followers for the month (Instagram + Facebook combined) from Meta's Audience insights. When this is filled in, it is used as-is. If you leave it blank, the tool falls back to adding up the per-post "Follows" column in the Instagram file — but that only counts follows credited to individual posts, so it's usually lower than real growth and Facebook files don't have it.</span></span>
         </label>
         <input type="number" id="im_follows">
       </div>
@@ -1183,12 +1183,19 @@ function computeAggregates(){
 
   // Meta primary upload — this is both totals AND trend/top-content source
   if((STATE.channels.instagram||STATE.channels.facebook) && !STATE.noMeta){
-    sums.follows += Number(document.getElementById('im_follows').value)||0;
+    // Follower growth: the typed "New Followers Gained" number (account-level, IG + FB) is the
+    // source of truth whenever it's filled in. The export's per-post "Follows" column only counts
+    // follows attributed to individual posts (it differs from true account growth and Facebook
+    // exports don't have it at all), so it's used ONLY as a fallback when the field is blank.
+    // Adding both double-counted followers (e.g. 481 typed + 481 from the file = 962).
+    const imFollowsRaw = document.getElementById('im_follows').value;
+    const imFollowsTyped = imFollowsRaw !== '' && imFollowsRaw !== null;
+    if(imFollowsTyped) sums.follows += Number(imFollowsRaw)||0;
     if(STATE.metaRowsAll.length){
       const rows = (STATE.metaClientKeys && STATE.metaClientKeys.length) ? STATE.metaRowsAll.filter(r=>STATE.metaClientKeys.includes(r.client)) : STATE.metaRowsAll;
       rows.forEach(r=>{
         sums.views+=r.views; sums.likes+=r.likes; sums.comments+=r.comments;
-        sums.shares+=r.shares; sums.saves+=r.saves; sums.follows+=r.follows; sums.posts+=1;
+        sums.shares+=r.shares; sums.saves+=r.saves; if(!imFollowsTyped) sums.follows+=r.follows; sums.posts+=1;
         addChannelTotal(metaChannelLabel(r), r.views);
       });
       foldIntoWeeklyAndPool(rows, r=>metaChannelLabel(r));
